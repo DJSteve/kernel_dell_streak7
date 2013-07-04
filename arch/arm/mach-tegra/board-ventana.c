@@ -393,13 +393,14 @@ static struct android_usb_platform_data andusb_plat = {
 	.functions = usb_functions_all,
 };
 
-static struct platform_device androidusb_device = {
+/*static struct platform_device androidusb_device = {
 	.name   = "android_usb",
 	.id     = -1,
 	.dev    = {
 		.platform_data  = &andusb_plat,
 	},
 };
+*/
 
 #ifdef CONFIG_USB_ANDROID_RNDIS
 static struct usb_ether_platform_data rndis_pdata = {
