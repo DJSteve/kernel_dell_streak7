@@ -422,7 +422,7 @@ struct vlan_entry *bond_next_vlan(struct bonding *bond, struct vlan_entry *curr)
 int bond_dev_queue_xmit(struct bonding *bond, struct sk_buff *skb,
 			struct net_device *slave_dev)
 {
-	unsigned short uninitialized_var(vlan_id);
+	unsigned short vlan_id;
 
 	/* Test vlan_list not vlgrp to catch and handle 802.1p tags */
 	if (!list_empty(&bond->vlan_list) &&

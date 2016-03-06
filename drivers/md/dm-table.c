@@ -435,7 +435,7 @@ static int __table_get_device(struct dm_table *t, struct dm_target *ti,
 		      const char *path, fmode_t mode, struct dm_dev **result)
 {
 	int r;
-	dev_t uninitialized_var(dev);
+	dev_t dev;
 	struct dm_dev_internal *dd;
 	unsigned int major, minor;
 
@@ -675,7 +675,7 @@ static int validate_hardware_logical_block_alignment(struct dm_table *table,
 	 */
 	unsigned short remaining = 0;
 
-	struct dm_target *uninitialized_var(ti);
+	struct dm_target *ti;
 	struct queue_limits ti_limits;
 	unsigned i = 0;
 
@@ -1040,7 +1040,7 @@ struct dm_target *dm_table_find_target(struct dm_table *t, sector_t sector)
 int dm_calculate_queue_limits(struct dm_table *table,
 			      struct queue_limits *limits)
 {
-	struct dm_target *uninitialized_var(ti);
+	struct dm_target *ti;
 	struct queue_limits ti_limits;
 	unsigned i = 0;
 

@@ -3286,7 +3286,7 @@ static int __devinit workqueue_cpu_callback(struct notifier_block *nfb,
 	unsigned int cpu = (unsigned long)hcpu;
 	struct global_cwq *gcwq = get_gcwq(cpu);
 	struct task_struct *new_trustee = NULL;
-	struct worker *uninitialized_var(new_worker);
+	struct worker *new_worker;
 	unsigned long flags;
 
 	action &= ~CPU_TASKS_FROZEN;

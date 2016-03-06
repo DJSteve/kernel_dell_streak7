@@ -5713,7 +5713,7 @@ static int migration_cpu_stop(void *data)
 void move_task_off_dead_cpu(int dead_cpu, struct task_struct *p)
 {
 	struct rq *rq = cpu_rq(dead_cpu);
-	int needs_cpu, uninitialized_var(dest_cpu);
+	int needs_cpu, dest_cpu;
 	unsigned long flags;
 
 	local_irq_save(flags);

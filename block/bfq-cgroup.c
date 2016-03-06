@@ -336,7 +336,7 @@ static void bfq_cic_change_cgroup(struct cfq_io_context *cic,
 				  struct cgroup *cgroup)
 {
 	struct bfq_data *bfqd;
-	unsigned long uninitialized_var(flags);
+	unsigned long flags;
 
 	bfqd = bfq_get_bfqd_locked(&cic->key, &flags);
 	if (bfqd != NULL) {
@@ -406,7 +406,7 @@ static void bfq_destroy_group(struct bfqio_cgroup *bgrp, struct bfq_group *bfqg)
 	struct bfq_data *bfqd;
 	struct bfq_service_tree *st;
 	struct bfq_entity *entity = bfqg->my_entity;
-	unsigned long uninitialized_var(flags);
+	unsigned long flags;
 	int i;
 
 	hlist_del(&bfqg->group_node);

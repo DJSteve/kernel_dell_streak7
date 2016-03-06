@@ -1119,7 +1119,7 @@ static int uvc_v4l2_mmap(struct file *file, struct vm_area_struct *vma)
 	struct uvc_fh *handle = file->private_data;
 	struct uvc_streaming *stream = handle->stream;
 	struct uvc_video_queue *queue = &stream->queue;
-	struct uvc_buffer *uninitialized_var(buffer);
+	struct uvc_buffer *buffer;
 	struct page *page;
 	unsigned long addr, start, size;
 	unsigned int i;

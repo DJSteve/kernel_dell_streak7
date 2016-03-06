@@ -133,7 +133,7 @@ static void bfq_exit_single_io_context(struct io_context *ioc,
 				       struct cfq_io_context *cic)
 {
 	struct bfq_data *bfqd;
-	unsigned long uninitialized_var(flags);
+	unsigned long flags;
 
 	bfqd = bfq_get_bfqd_locked(&cic->key, &flags);
 	if (bfqd != NULL) {

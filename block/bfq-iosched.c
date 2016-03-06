@@ -1418,7 +1418,7 @@ static void bfq_changed_ioprio(struct io_context *ioc,
 	struct bfq_data *bfqd;
 	struct bfq_queue *bfqq, *new_bfqq;
 	struct bfq_group *bfqg;
-	unsigned long uninitialized_var(flags);
+	unsigned long flags;
 
 	bfqd = bfq_get_bfqd_locked(&cic->key, &flags);
 	if (unlikely(bfqd == NULL))

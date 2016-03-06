@@ -331,7 +331,7 @@ void release_pages(struct page **pages, int nr, int cold)
 	int i;
 	struct pagevec pages_to_free;
 	struct zone *zone = NULL;
-	unsigned long uninitialized_var(flags);
+	unsigned long flags;
 
 	pagevec_init(&pages_to_free, cold);
 	for (i = 0; i < nr; i++) {
