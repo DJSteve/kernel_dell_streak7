@@ -346,7 +346,6 @@ static struct nvhost_device ventana_disp2_device = {
 		.platform_data = &ventana_disp2_pdata,
 	},
 };
-
 static struct nvmap_platform_carveout ventana_carveouts[] = {
 	[0] = {
 		.name		= "iram",
