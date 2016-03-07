@@ -1,30 +1,190 @@
---- mmu.c
-+++ mmu.c
-@@ -2254,6 +2254,10 @@
- 		return 0;
- 	}
- 	direct = !is_paging(vcpu);
+--- arch/x86/kvm/mmu.c
++++ arch/x86/kvm/mmu.c
+@@ -2374,80 +2526,159 @@
+ 	return ret;
+ }
+ 
+-static int mmu_alloc_roots(struct kvm_vcpu *vcpu)
++static int mmu_alloc_direct_roots(struct kvm_vcpu *vcpu)
+ {
+-	int i;
+-	gfn_t root_gfn;
+ 	struct kvm_mmu_page *sp;
+-	int direct = 0;
+-	u64 pdptr;
+-
+-	root_gfn = vcpu->arch.cr3 >> PAGE_SHIFT;
++	unsigned i;
+ 
+ 	if (vcpu->arch.mmu.shadow_root_level == PT64_ROOT_LEVEL) {
++		spin_lock(&vcpu->kvm->mmu_lock);
++		kvm_mmu_free_some_pages(vcpu);
++		sp = kvm_mmu_get_page(vcpu, 0, 0, PT64_ROOT_LEVEL,
++				      1, ACC_ALL, NULL);
++		++sp->root_count;
++		spin_unlock(&vcpu->kvm->mmu_lock);
++		vcpu->arch.mmu.root_hpa = __pa(sp->spt);
++	} else if (vcpu->arch.mmu.shadow_root_level == PT32E_ROOT_LEVEL) {
++		for (i = 0; i < 4; ++i) {
++			hpa_t root = vcpu->arch.mmu.pae_root[i];
++
++			ASSERT(!VALID_PAGE(root));
++			spin_lock(&vcpu->kvm->mmu_lock);
++			kvm_mmu_free_some_pages(vcpu);
++			sp = kvm_mmu_get_page(vcpu, i << (30 - PAGE_SHIFT),
++					      i << 30,
++					      PT32_ROOT_LEVEL, 1, ACC_ALL,
++					      NULL);
++			root = __pa(sp->spt);
++			++sp->root_count;
++			spin_unlock(&vcpu->kvm->mmu_lock);
++			vcpu->arch.mmu.pae_root[i] = root | PT_PRESENT_MASK;
++		}
++		vcpu->arch.mmu.root_hpa = __pa(vcpu->arch.mmu.pae_root);
++	} else
++		BUG();
++
++	return 0;
++}
++
++static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)
++{
++	struct kvm_mmu_page *sp;
++	u64 pdptr, pm_mask;
++	gfn_t root_gfn;
++	int i;
++
++	root_gfn = vcpu->arch.mmu.get_cr3(vcpu) >> PAGE_SHIFT;
 +
 +	if (mmu_check_root(vcpu, root_gfn))
 +		return 1;
 +
++	/*
++	 * Do we shadow a long mode page table? If so we need to
++	 * write-protect the guests page table root.
++	 */
++	if (vcpu->arch.mmu.root_level == PT64_ROOT_LEVEL) {
+ 		hpa_t root = vcpu->arch.mmu.root_hpa;
+ 
+ 		ASSERT(!VALID_PAGE(root));
+-		if (mmu_check_root(vcpu, root_gfn))
+-			return 1;
+-		if (tdp_enabled) {
+-			direct = 1;
+-			root_gfn = 0;
+-		}
++
+ 		spin_lock(&vcpu->kvm->mmu_lock);
+ 		kvm_mmu_free_some_pages(vcpu);
+-		sp = kvm_mmu_get_page(vcpu, root_gfn, 0,
+-				      PT64_ROOT_LEVEL, direct,
+-				      ACC_ALL, NULL);
++		sp = kvm_mmu_get_page(vcpu, root_gfn, 0, PT64_ROOT_LEVEL,
++				      0, ACC_ALL, NULL);
+ 		root = __pa(sp->spt);
+ 		++sp->root_count;
+ 		spin_unlock(&vcpu->kvm->mmu_lock);
+ 		vcpu->arch.mmu.root_hpa = root;
+ 		return 0;
+ 	}
+-	direct = !is_paging(vcpu);
++
++	/*
++	 * We shadow a 32 bit page table. This may be a legacy 2-level
++	 * or a PAE 3-level page table. In either case we need to be aware that
++	 * the shadow page table may be a PAE or a long mode page table.
++	 */
++	pm_mask = PT_PRESENT_MASK;
++	if (vcpu->arch.mmu.shadow_root_level == PT64_ROOT_LEVEL)
++		pm_mask |= PT_ACCESSED_MASK | PT_WRITABLE_MASK | PT_USER_MASK;
++
  	for (i = 0; i < 4; ++i) {
  		hpa_t root = vcpu->arch.mmu.pae_root[i];
  
-@@ -2265,13 +2269,13 @@
+ 		ASSERT(!VALID_PAGE(root));
+ 		if (vcpu->arch.mmu.root_level == PT32E_ROOT_LEVEL) {
+-			pdptr = kvm_pdptr_read(vcpu, i);
++			pdptr = kvm_pdptr_read_mmu(vcpu, &vcpu->arch.mmu, i);
+ 			if (!is_present_gpte(pdptr)) {
+ 				vcpu->arch.mmu.pae_root[i] = 0;
  				continue;
  			}
  			root_gfn = pdptr >> PAGE_SHIFT;
-+			if (mmu_check_root(vcpu, root_gfn))
-+				return 1;
- 		} else if (vcpu->arch.mmu.root_level == 0)
- 			root_gfn = 0;
+-		} else if (vcpu->arch.mmu.root_level == 0)
+-			root_gfn = 0;
 -		if (mmu_check_root(vcpu, root_gfn))
 -			return 1;
- 		if (tdp_enabled) {
- 			direct = 1;
+-		if (tdp_enabled) {
+-			direct = 1;
 -			root_gfn = i << 30;
-+			root_gfn = i << (30 - PAGE_SHIFT);
++			if (mmu_check_root(vcpu, root_gfn))
++				return 1;
  		}
  		spin_lock(&vcpu->kvm->mmu_lock);
  		kvm_mmu_free_some_pages(vcpu);
+ 		sp = kvm_mmu_get_page(vcpu, root_gfn, i << 30,
+-				      PT32_ROOT_LEVEL, direct,
++				      PT32_ROOT_LEVEL, 0,
+ 				      ACC_ALL, NULL);
+ 		root = __pa(sp->spt);
+ 		++sp->root_count;
+ 		spin_unlock(&vcpu->kvm->mmu_lock);
+ 
+-		vcpu->arch.mmu.pae_root[i] = root | PT_PRESENT_MASK;
++		vcpu->arch.mmu.pae_root[i] = root | pm_mask;
+ 	}
+ 	vcpu->arch.mmu.root_hpa = __pa(vcpu->arch.mmu.pae_root);
++
++	/*
++	 * If we shadow a 32 bit page table with a long mode page
++	 * table we enter this path.
++	 */
++	if (vcpu->arch.mmu.shadow_root_level == PT64_ROOT_LEVEL) {
++		if (vcpu->arch.mmu.lm_root == NULL) {
++			/*
++			 * The additional page necessary for this is only
++			 * allocated on demand.
++			 */
++
++			u64 *lm_root;
++
++			lm_root = (void*)get_zeroed_page(GFP_KERNEL);
++			if (lm_root == NULL)
++				return 1;
++
++			lm_root[0] = __pa(vcpu->arch.mmu.pae_root) | pm_mask;
++
++			vcpu->arch.mmu.lm_root = lm_root;
++		}
++
++		vcpu->arch.mmu.root_hpa = __pa(vcpu->arch.mmu.lm_root);
++	}
++
+ 	return 0;
+ }
+ 
++static int mmu_alloc_roots(struct kvm_vcpu *vcpu)
++{
++	if (vcpu->arch.mmu.direct_map)
++		return mmu_alloc_direct_roots(vcpu);
++	else
++		return mmu_alloc_shadow_roots(vcpu);
++}
++
+ static void mmu_sync_roots(struct kvm_vcpu *vcpu)
+ {
+ 	int i;
+ 	struct kvm_mmu_page *sp;
+ 
++	if (vcpu->arch.mmu.direct_map)
++		return;
++
+ 	if (!VALID_PAGE(vcpu->arch.mmu.root_hpa))
+ 		return;
+-	if (vcpu->arch.mmu.shadow_root_level == PT64_ROOT_LEVEL) {
++
++	trace_kvm_mmu_audit(vcpu, AUDIT_PRE_SYNC);
++	if (vcpu->arch.mmu.root_level == PT64_ROOT_LEVEL) {
+ 		hpa_t root = vcpu->arch.mmu.root_hpa;
+ 		sp = page_header(root);
+ 		mmu_sync_children(vcpu, sp);

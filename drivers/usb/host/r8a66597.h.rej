@@ -1,0 +1,11 @@
+--- drivers/usb/host/r8a66597.h
++++ drivers/usb/host/r8a66597.h
+@@ -227,7 +227,7 @@
+ 		int odd = len & 0x0001;
+ 
+ 		len = len / 2;
+-		ioread16_rep(fifoaddr, buf, len);
++		iowrite16_rep(fifoaddr, buf, len);
+ 		if (unlikely(odd)) {
+ 			buf = &buf[len];
+ 			iowrite8((unsigned char)*buf, fifoaddr);

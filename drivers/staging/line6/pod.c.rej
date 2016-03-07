@@ -1,0 +1,254 @@
+--- drivers/staging/line6/pod.c
++++ drivers/staging/line6/pod.c
+@@ -946,87 +992,203 @@
+ {
+ 	struct usb_interface *interface = to_usb_interface(dev);
+ 	struct usb_line6_pod *pod = usb_get_intfdata(interface);
+-	int err = 0;
+-	DECLARE_WAITQUEUE(wait, current);
+-	pod->clipping.value = 0;
+-	add_wait_queue(&pod->clipping.wait, &wait);
+-	current->state = TASK_INTERRUPTIBLE;
+-
+-	while (pod->clipping.value == 0) {
+-		if (signal_pending(current)) {
+-			err = -ERESTARTSYS;
+-			break;
+-		} else
+-			schedule();
+-	}
++	return wait_event_interruptible(pod->clipping.wait,
++					pod->clipping.value != 0);
++}
+ 
+-	current->state = TASK_RUNNING;
+-	remove_wait_queue(&pod->clipping.wait, &wait);
+-	return err;
++/*
++	POD startup procedure.
++	This is a sequence of functions with special requirements (e.g., must
++	not run immediately after initialization, must not run in interrupt
++	context). After the last one has finished, the device is ready to use.
++*/
++
++static void pod_startup1(struct usb_line6_pod *pod)
++{
++	CHECK_STARTUP_PROGRESS(pod->startup_progress, POD_STARTUP_INIT);
++
++	/* delay startup procedure: */
++	line6_start_timer(&pod->startup_timer, POD_STARTUP_DELAY, pod_startup2,
++			  (unsigned long)pod);
++}
++
++static void pod_startup2(unsigned long data)
++{
++	struct usb_line6_pod *pod = (struct usb_line6_pod *)data;
++
++	/* schedule another startup procedure until startup is complete: */
++	if (pod->startup_progress >= POD_STARTUP_LAST)
++		return;
++
++	pod->startup_progress = POD_STARTUP_DUMPREQ;
++	line6_start_timer(&pod->startup_timer, POD_STARTUP_DELAY, pod_startup2,
++			  (unsigned long)pod);
++
++	/* current channel dump: */
++	line6_dump_request_async(&pod->dumpreq, &pod->line6, 0,
++				 LINE6_DUMP_CURRENT);
++}
++
++static void pod_startup3(struct usb_line6_pod *pod)
++{
++	struct usb_line6 *line6 = &pod->line6;
++	CHECK_STARTUP_PROGRESS(pod->startup_progress, POD_STARTUP_VERSIONREQ);
++
++	/* request firmware version: */
++	line6_version_request_async(line6);
++}
++
++static void pod_startup4(struct usb_line6_pod *pod)
++{
++	CHECK_STARTUP_PROGRESS(pod->startup_progress, POD_STARTUP_WORKQUEUE);
++
++	/* schedule work for global work queue: */
++	schedule_work(&pod->startup_work);
+ }
+ 
+-#define POD_GET_SYSTEM_PARAM(code, tuner, sign) \
++static void pod_startup5(struct work_struct *work)
++{
++	struct usb_line6_pod *pod =
++	    container_of(work, struct usb_line6_pod, startup_work);
++	struct usb_line6 *line6 = &pod->line6;
++
++	CHECK_STARTUP_PROGRESS(pod->startup_progress, POD_STARTUP_SETUP);
++
++	/* serial number: */
++	line6_read_serial_number(&pod->line6, &pod->serial_number);
++
++	/* ALSA audio interface: */
++	line6_register_audio(line6);
++
++	/* device files: */
++	line6_pod_create_files(pod->firmware_version,
++			       line6->properties->device_bit, line6->ifcdev);
++}
++
++#define POD_GET_SYSTEM_PARAM(code, sign) \
+ static ssize_t pod_get_ ## code(struct device *dev, \
+ 				struct device_attribute *attr, char *buf) \
+ { \
+ 	struct usb_interface *interface = to_usb_interface(dev); \
+ 	struct usb_line6_pod *pod = usb_get_intfdata(interface); \
+-	return pod_get_system_param(pod, buf, POD_ ## code, &pod->code, \
+-				    tuner, sign); \
++	return pod_get_system_param_string(pod, buf, POD_ ## code,	\
++					   &pod->code, sign);		\
+ }
+ 
+-#define POD_GET_SET_SYSTEM_PARAM(code, mask, tuner, sign) \
+-POD_GET_SYSTEM_PARAM(code, tuner, sign) \
++#define POD_GET_SET_SYSTEM_PARAM(code, mask, sign) \
++POD_GET_SYSTEM_PARAM(code, sign) \
+ static ssize_t pod_set_ ## code(struct device *dev, \
+ 				struct device_attribute *attr, \
+ 				const char *buf, size_t count) \
+ { \
+ 	struct usb_interface *interface = to_usb_interface(dev); \
+ 	struct usb_line6_pod *pod = usb_get_intfdata(interface); \
+-	return pod_set_system_param(pod, buf, count, POD_ ## code, mask, \
+-				    tuner); \
++	return pod_set_system_param_string(pod, buf, count, POD_ ## code, mask); \
+ }
+ 
+-POD_GET_SET_SYSTEM_PARAM(monitor_level, 0xffff, 0, 0);
+-POD_GET_SET_SYSTEM_PARAM(routing, 0x0003, 0, 0);
+-POD_GET_SET_SYSTEM_PARAM(tuner_mute, 0x0001, 1, 0);
+-POD_GET_SET_SYSTEM_PARAM(tuner_freq, 0xffff, 1, 0);
+-POD_GET_SYSTEM_PARAM(tuner_note, 1, 1);
+-POD_GET_SYSTEM_PARAM(tuner_pitch, 1, 1);
++POD_GET_SET_SYSTEM_PARAM(monitor_level, 0xffff, 0);
++POD_GET_SET_SYSTEM_PARAM(routing, 0x0003, 0);
++POD_GET_SET_SYSTEM_PARAM(tuner_mute, 0x0001, 0);
++POD_GET_SET_SYSTEM_PARAM(tuner_freq, 0xffff, 0);
++POD_GET_SYSTEM_PARAM(tuner_note, 1);
++POD_GET_SYSTEM_PARAM(tuner_pitch, 1);
+ 
+ #undef GET_SET_SYSTEM_PARAM
+ #undef GET_SYSTEM_PARAM
+ 
+ /* POD special files: */
+-static DEVICE_ATTR(channel, S_IWUGO | S_IRUGO, pod_get_channel, pod_set_channel);
++static DEVICE_ATTR(channel, S_IWUSR | S_IRUGO, pod_get_channel,
++		   pod_set_channel);
+ static DEVICE_ATTR(clip, S_IRUGO, pod_wait_for_clip, line6_nop_write);
+ static DEVICE_ATTR(device_id, S_IRUGO, pod_get_device_id, line6_nop_write);
+ static DEVICE_ATTR(dirty, S_IRUGO, pod_get_dirty, line6_nop_write);
+-static DEVICE_ATTR(dump, S_IWUGO | S_IRUGO, pod_get_dump, pod_set_dump);
+-static DEVICE_ATTR(dump_buf, S_IWUGO | S_IRUGO, pod_get_dump_buf, pod_set_dump_buf);
+-static DEVICE_ATTR(finish, S_IWUGO, line6_nop_read, pod_set_finish);
+-static DEVICE_ATTR(firmware_version, S_IRUGO, pod_get_firmware_version, line6_nop_write);
+-static DEVICE_ATTR(midi_postprocess, S_IWUGO | S_IRUGO, pod_get_midi_postprocess, pod_set_midi_postprocess);
+-static DEVICE_ATTR(monitor_level, S_IWUGO | S_IRUGO, pod_get_monitor_level, pod_set_monitor_level);
++static DEVICE_ATTR(dump, S_IWUSR | S_IRUGO, pod_get_dump, pod_set_dump);
++static DEVICE_ATTR(dump_buf, S_IWUSR | S_IRUGO, pod_get_dump_buf,
++		   pod_set_dump_buf);
++static DEVICE_ATTR(finish, S_IWUSR, line6_nop_read, pod_set_finish);
++static DEVICE_ATTR(firmware_version, S_IRUGO, pod_get_firmware_version,
++		   line6_nop_write);
++static DEVICE_ATTR(midi_postprocess, S_IWUSR | S_IRUGO,
++		   pod_get_midi_postprocess, pod_set_midi_postprocess);
++static DEVICE_ATTR(monitor_level, S_IWUSR | S_IRUGO, pod_get_monitor_level,
++		   pod_set_monitor_level);
+ static DEVICE_ATTR(name, S_IRUGO, pod_get_name, line6_nop_write);
+ static DEVICE_ATTR(name_buf, S_IRUGO, pod_get_name_buf, line6_nop_write);
+-static DEVICE_ATTR(retrieve_amp_setup, S_IWUGO, line6_nop_read, pod_set_retrieve_amp_setup);
+-static DEVICE_ATTR(retrieve_channel, S_IWUGO, line6_nop_read, pod_set_retrieve_channel);
+-static DEVICE_ATTR(retrieve_effects_setup, S_IWUGO, line6_nop_read, pod_set_retrieve_effects_setup);
+-static DEVICE_ATTR(routing, S_IWUGO | S_IRUGO, pod_get_routing, pod_set_routing);
+-static DEVICE_ATTR(serial_number, S_IRUGO, pod_get_serial_number, line6_nop_write);
+-static DEVICE_ATTR(store_amp_setup, S_IWUGO, line6_nop_read, pod_set_store_amp_setup);
+-static DEVICE_ATTR(store_channel, S_IWUGO, line6_nop_read, pod_set_store_channel);
+-static DEVICE_ATTR(store_effects_setup, S_IWUGO, line6_nop_read, pod_set_store_effects_setup);
+-static DEVICE_ATTR(tuner_freq, S_IWUGO | S_IRUGO, pod_get_tuner_freq, pod_set_tuner_freq);
+-static DEVICE_ATTR(tuner_mute, S_IWUGO | S_IRUGO, pod_get_tuner_mute, pod_set_tuner_mute);
++static DEVICE_ATTR(retrieve_amp_setup, S_IWUSR, line6_nop_read,
++		   pod_set_retrieve_amp_setup);
++static DEVICE_ATTR(retrieve_channel, S_IWUSR, line6_nop_read,
++		   pod_set_retrieve_channel);
++static DEVICE_ATTR(retrieve_effects_setup, S_IWUSR, line6_nop_read,
++		   pod_set_retrieve_effects_setup);
++static DEVICE_ATTR(routing, S_IWUSR | S_IRUGO, pod_get_routing,
++		   pod_set_routing);
++static DEVICE_ATTR(serial_number, S_IRUGO, pod_get_serial_number,
++		   line6_nop_write);
++static DEVICE_ATTR(store_amp_setup, S_IWUSR, line6_nop_read,
++		   pod_set_store_amp_setup);
++static DEVICE_ATTR(store_channel, S_IWUSR, line6_nop_read,
++		   pod_set_store_channel);
++static DEVICE_ATTR(store_effects_setup, S_IWUSR, line6_nop_read,
++		   pod_set_store_effects_setup);
++static DEVICE_ATTR(tuner_freq, S_IWUSR | S_IRUGO, pod_get_tuner_freq,
++		   pod_set_tuner_freq);
++static DEVICE_ATTR(tuner_mute, S_IWUSR | S_IRUGO, pod_get_tuner_mute,
++		   pod_set_tuner_mute);
+ static DEVICE_ATTR(tuner_note, S_IRUGO, pod_get_tuner_note, line6_nop_write);
+ static DEVICE_ATTR(tuner_pitch, S_IRUGO, pod_get_tuner_pitch, line6_nop_write);
+ 
+-#if CREATE_RAW_FILE
+-static DEVICE_ATTR(raw, S_IWUGO, line6_nop_read, line6_set_raw);
++#ifdef CONFIG_LINE6_USB_RAW
++static DEVICE_ATTR(raw, S_IWUSR, line6_nop_read, line6_set_raw);
+ #endif
+ 
++/* control info callback */
++static int snd_pod_control_monitor_info(struct snd_kcontrol *kcontrol,
++					struct snd_ctl_elem_info *uinfo)
++{
++	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
++	uinfo->count = 1;
++	uinfo->value.integer.min = 0;
++	uinfo->value.integer.max = 65535;
++	return 0;
++}
++
++/* control get callback */
++static int snd_pod_control_monitor_get(struct snd_kcontrol *kcontrol,
++				       struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_line6_pcm *line6pcm = snd_kcontrol_chip(kcontrol);
++	struct usb_line6_pod *pod = (struct usb_line6_pod *)line6pcm->line6;
++	ucontrol->value.integer.value[0] = pod->monitor_level.value;
++	return 0;
++}
++
++/* control put callback */
++static int snd_pod_control_monitor_put(struct snd_kcontrol *kcontrol,
++				       struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_line6_pcm *line6pcm = snd_kcontrol_chip(kcontrol);
++	struct usb_line6_pod *pod = (struct usb_line6_pod *)line6pcm->line6;
++
++	if (ucontrol->value.integer.value[0] == pod->monitor_level.value)
++		return 0;
++
++	pod->monitor_level.value = ucontrol->value.integer.value[0];
++	pod_set_system_param_int(pod, ucontrol->value.integer.value[0],
++				 POD_monitor_level);
++	return 1;
++}
++
++/* control definition */
++static struct snd_kcontrol_new pod_control_monitor = {
++	.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
++	.name = "Monitor Playback Volume",
++	.index = 0,
++	.access = SNDRV_CTL_ELEM_ACCESS_READWRITE,
++	.info = snd_pod_control_monitor_info,
++	.get = snd_pod_control_monitor_get,
++	.put = snd_pod_control_monitor_put
++};
++
+ /*
+ 	POD destructor.
+ */

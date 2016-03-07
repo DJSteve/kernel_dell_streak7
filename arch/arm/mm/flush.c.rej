@@ -1,0 +1,74 @@
+--- arch/arm/mm/flush.c
++++ arch/arm/mm/flush.c
+@@ -18,6 +19,7 @@
+ #include <asm/smp_plat.h>
+ #include <asm/system.h>
+ #include <asm/tlbflush.h>
++#include <asm/smp_plat.h>
+ 
+ #include "mm.h"
+ 
+@@ -102,16 +116,16 @@
+ 	if (vma->vm_flags & VM_EXEC && icache_is_vivt_asid_tagged())
+ 		__flush_icache_all();
+ }
++
+ #else
+-#define flush_pfn_alias(pfn,vaddr)	do { } while (0)
++#define flush_pfn_alias(pfn,vaddr)		do { } while (0)
++#define flush_icache_alias(pfn,vaddr,len)	do { } while (0)
+ #endif
+ 
+-#ifdef CONFIG_SMP
+ static void flush_ptrace_access_other(void *args)
+ {
+ 	__flush_icache_all();
+ }
+-#endif
+ 
+ static
+ void flush_ptrace_access(struct vm_area_struct *vma, struct page *page,
+@@ -131,15 +145,16 @@
+ 		return;
+ 	}
+ 
+-	/* VIPT non-aliasing cache */
++	/* VIPT non-aliasing D-cache */
+ 	if (vma->vm_flags & VM_EXEC) {
+ 		unsigned long addr = (unsigned long)kaddr;
+-		__cpuc_coherent_kern_range(addr, addr + len);
+-#ifdef CONFIG_SMP
++		if (icache_is_vipt_aliasing())
++			flush_icache_alias(page_to_pfn(page), uaddr, len);
++		else
++			__cpuc_coherent_kern_range(addr, addr + len);
+ 		if (cache_ops_need_broadcast())
+ 			smp_call_function(flush_ptrace_access_other,
+ 					  NULL, 1);
+-#endif
+ 	}
+ }
+ 
+@@ -289,17 +334,16 @@
+ 
+ 	mapping = page_mapping(page);
+ 
+-#ifndef CONFIG_SMP
+-	if (!PageHighMem(page) && mapping && !mapping_mapped(mapping))
+-		set_bit(PG_dcache_dirty, &page->flags);
+-	else
+-#endif
+-	{
++	if (!cache_ops_need_broadcast() &&
++	    mapping && !mapping_mapped(mapping))
++		clear_bit(PG_dcache_clean, &page->flags);
++	else {
+ 		__flush_dcache_page(mapping, page);
+ 		if (mapping && cache_is_vivt())
+ 			__flush_dcache_aliases(mapping, page);
+ 		else if (mapping)
+ 			__flush_icache_all();
++		set_bit(PG_dcache_clean, &page->flags);
+ 	}
+ }
+ EXPORT_SYMBOL(flush_dcache_page);

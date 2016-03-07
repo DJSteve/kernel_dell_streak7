@@ -51,4 +51,9 @@ int tegra_clk_cfg_ex(struct clk *c, enum tegra_clk_ex_param p, u32 setting);
 int tegra_is_clk_enabled(struct clk *clk);
 #endif
 
+int clk_enable_cansleep(struct clk *clk);
+void clk_disable_cansleep(struct clk *clk);
+int clk_set_rate_cansleep(struct clk *clk, unsigned long rate);
+int clk_set_parent_cansleep(struct clk *clk, struct clk *parent);
+
 #endif

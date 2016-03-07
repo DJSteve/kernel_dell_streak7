@@ -1,0 +1,14 @@
+--- drivers/xen/events.c
++++ drivers/xen/events.c
+@@ -295,7 +329,10 @@
+ 	}
+ #endif
+ 
+-	memset(cpu_evtchn_mask(0), ~0, sizeof(cpu_evtchn_mask(0)));
++	for_each_possible_cpu(i)
++		memset(cpu_evtchn_mask(i),
++		       (i == 0) ? ~0 : 0, sizeof(struct cpu_evtchn_s));
++
+ }
+ 
+ static inline void clear_evtchn(int port)

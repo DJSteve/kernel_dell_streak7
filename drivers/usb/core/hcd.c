@@ -1287,6 +1287,17 @@ void usb_hcd_unmap_urb_for_dma(struct usb_hcd *hcd, struct urb *urb)
 				sizeof(struct usb_ctrlrequest),
 				DMA_TO_DEVICE);
 
+	/* Make it safe to call this routine more than once */
+	urb->transfer_flags &= ~(URB_SETUP_MAP_SINGLE | URB_SETUP_MAP_LOCAL);
+}
+EXPORT_SYMBOL_GPL(unmap_urb_setup_for_dma);
+
+void unmap_urb_for_dma(struct usb_hcd *hcd, struct urb *urb)
+{
+	enum dma_data_direction dir;
+
+	unmap_urb_setup_for_dma(hcd, urb);
+
 	dir = usb_urb_dir_in(urb) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 	if (urb->transfer_flags & URB_DMA_MAP_SG)
 		dma_unmap_sg(hcd->self.controller,
@@ -1339,6 +1350,8 @@ int usb_hcd_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 	 */
 
 	if (usb_endpoint_xfer_control(&urb->ep->desc)) {
+		if (hcd->self.uses_pio_for_control)
+			return ret;
 		if (hcd->self.uses_dma) {
 			urb->setup_dma = dma_map_single(
 					hcd->self.controller,

@@ -1,0 +1,22 @@
+--- include/linux/mmc/host.h
++++ include/linux/mmc/host.h
+@@ -164,13 +171,17 @@
+ #define MMC_CAP_NONREMOVABLE	(1 << 8)	/* Nonremovable e.g. eMMC */
+ #define MMC_CAP_WAIT_WHILE_BUSY	(1 << 9)	/* Waits while card is busy */
+ #define MMC_CAP_ERASE		(1 << 10)	/* Allow erase/trim commands */
++#define MMC_CAP_1_8V_DDR	(1 << 11)	/* can support */
++						/* DDR mode at 1.8V */
++#define MMC_CAP_1_2V_DDR	(1 << 12)	/* can support */
++						/* DDR mode at 1.2V */
++#define MMC_CAP_POWER_OFF_CARD	(1 << 13)	/* Can power off after boot */
+ 
+ 	mmc_pm_flag_t		pm_caps;	/* supported pm features */
+ 
+ 	/* host specific block data */
+ 	unsigned int		max_seg_size;	/* see blk_queue_max_segment_size */
+-	unsigned short		max_hw_segs;	/* see blk_queue_max_hw_segments */
+-	unsigned short		max_phys_segs;	/* see blk_queue_max_phys_segments */
++	unsigned short		max_segs;	/* see blk_queue_max_segments */
+ 	unsigned short		unused;
+ 	unsigned int		max_req_size;	/* maximum number of bytes in one req */
+ 	unsigned int		max_blk_size;	/* maximum size of one mmc block */

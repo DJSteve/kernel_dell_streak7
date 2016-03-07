@@ -1,0 +1,30 @@
+--- kernel/power/process.c
++++ kernel/power/process.c
+@@ -40,6 +40,7 @@
+ 	struct timeval start, end;
+ 	u64 elapsed_csecs64;
+ 	unsigned int elapsed_csecs;
++	bool wakeup = false;
+ 
+ 	do_gettimeofday(&start);
+ 
+@@ -102,8 +108,9 @@
+ 		 * but it cleans up leftover PF_FREEZE requests.
+ 		 */
+ 		printk("\n");
+-		printk(KERN_ERR "Freezing of tasks failed after %d.%02d seconds "
++		printk(KERN_ERR "Freezing of tasks %s after %d.%02d seconds "
+ 		       "(%d tasks refusing to freeze, wq_busy=%d):\n",
++		       wakeup ? "aborted" : "failed",
+ 		       elapsed_csecs / 100, elapsed_csecs % 100,
+ 		       todo - wq_busy, wq_busy);
+ 
+@@ -112,7 +119,7 @@
+ 		read_lock(&tasklist_lock);
+ 		do_each_thread(g, p) {
+ 			task_lock(p);
+-			if (freezing(p) && !freezer_should_skip(p))
++			if (!wakeup && freezing(p) && !freezer_should_skip(p))
+ 				sched_show_task(p);
+ 			cancel_freezing(p);
+ 			task_unlock(p);

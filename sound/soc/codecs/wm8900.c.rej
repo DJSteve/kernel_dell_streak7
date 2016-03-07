@@ -1,0 +1,81 @@
+--- sound/soc/codecs/wm8900.c
++++ sound/soc/codecs/wm8900.c
+@@ -186,7 +184,6 @@
+ {
+ 	switch (reg) {
+ 	case WM8900_REG_ID:
+-	case WM8900_REG_POWER1:
+ 		return 1;
+ 	default:
+ 		return 0;
+@@ -1178,61 +1169,28 @@
+ 			snd_soc_write(codec, i, cache[i]);
+ 		kfree(cache);
+ 	} else
+-		dev_err(&pdev->dev, "Unable to allocate register cache\n");
++		dev_err(codec->dev, "Unable to allocate register cache\n");
+ 
+ 	return 0;
+ }
+ 
+-static struct snd_soc_codec *wm8900_codec;
+-
+-static __devinit int wm8900_i2c_probe(struct i2c_client *i2c,
+-				      const struct i2c_device_id *id)
++static int wm8900_probe(struct snd_soc_codec *codec)
+ {
+-	struct wm8900_priv *wm8900;
+-	struct snd_soc_codec *codec;
+-	unsigned int reg;
+-	int ret;
+-
+-	wm8900 = kzalloc(sizeof(struct wm8900_priv), GFP_KERNEL);
+-	if (wm8900 == NULL)
+-		return -ENOMEM;
++	struct wm8900_priv *wm8900 = snd_soc_codec_get_drvdata(codec);
++	int ret = 0, reg;
+ 
+-	codec = &wm8900->codec;
+-	snd_soc_codec_set_drvdata(codec, wm8900);
+-	codec->reg_cache = &wm8900->reg_cache[0];
+-	codec->reg_cache_size = WM8900_MAXREG;
+-
+-	mutex_init(&codec->mutex);
+-	INIT_LIST_HEAD(&codec->dapm_widgets);
+-	INIT_LIST_HEAD(&codec->dapm_paths);
+-
+-	codec->name = "WM8900";
+-	codec->owner = THIS_MODULE;
+-	codec->dai = &wm8900_dai;
+-	codec->num_dai = 1;
+-	codec->control_data = i2c;
+-	codec->set_bias_level = wm8900_set_bias_level;
+-	codec->volatile_register = wm8900_volatile_register;
+-	codec->dev = &i2c->dev;
+-
+-	ret = snd_soc_codec_set_cache_io(codec, 8, 16, SND_SOC_I2C);
++	ret = snd_soc_codec_set_cache_io(codec, 8, 16, wm8900->control_type);
+ 	if (ret != 0) {
+-		dev_err(&i2c->dev, "Failed to set cache I/O: %d\n", ret);
+-		goto err;
++		dev_err(codec->dev, "Failed to set cache I/O: %d\n", ret);
++		return ret;
+ 	}
+ 
+ 	reg = snd_soc_read(codec, WM8900_REG_ID);
+ 	if (reg != 0x8900) {
+-		dev_err(&i2c->dev, "Device is not a WM8900 - ID %x\n", reg);
+-		ret = -ENODEV;
+-		goto err;
++		dev_err(codec->dev, "Device is not a WM8900 - ID %x\n", reg);
++		return -ENODEV;
+ 	}
+ 
+-	/* Read back from the chip */
+-	reg = snd_soc_read(codec, WM8900_REG_POWER1);
+-	reg = (reg >> 12) & 0xf;
+-	dev_info(&i2c->dev, "WM8900 revision %d\n", reg);
+-
+ 	wm8900_reset(codec);
+ 
+ 	/* Turn the chip on */

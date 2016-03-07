@@ -50,6 +50,12 @@ struct mmc_ios {
 #define MMC_TIMING_LEGACY	0
 #define MMC_TIMING_MMC_HS	1
 #define MMC_TIMING_SD_HS	2
+
+	unsigned char	ddr;			/* dual data rate used */
+
+#define MMC_SDR_MODE		0
+#define MMC_1_2V_DDR_MODE	1
+#define MMC_1_8V_DDR_MODE	2
 };
 
 struct mmc_host_ops {
@@ -123,6 +129,7 @@ struct mmc_host {
 	const struct mmc_host_ops *ops;
 	unsigned int		f_min;
 	unsigned int		f_max;
+	unsigned int		f_init;
 	u32			ocr_avail;
 	struct notifier_block	pm_notify;
 
@@ -217,6 +224,10 @@ struct mmc_host {
 	struct led_trigger	*led;		/* activity led */
 #endif
 
+#ifdef CONFIG_REGULATOR
+	bool			regulator_enabled; /* regulator state */
+#endif
+
 	struct dentry		*debugfs_root;
 
 #ifdef CONFIG_MMC_EMBEDDED_SDIO
@@ -270,8 +281,8 @@ extern int mmc_resume_bus(struct mmc_host *host);
 extern int mmc_suspend_host(struct mmc_host *);
 extern int mmc_resume_host(struct mmc_host *);
 
-extern void mmc_power_save_host(struct mmc_host *host);
-extern void mmc_power_restore_host(struct mmc_host *host);
+extern int mmc_power_save_host(struct mmc_host *host);
+extern int mmc_power_restore_host(struct mmc_host *host);
 
 extern void mmc_detect_change(struct mmc_host *, unsigned long delay);
 extern void mmc_request_done(struct mmc_host *, struct mmc_request *);
@@ -284,8 +295,24 @@ static inline void mmc_signal_sdio_irq(struct mmc_host *host)
 
 struct regulator;
 
+#ifdef CONFIG_REGULATOR
 int mmc_regulator_get_ocrmask(struct regulator *supply);
-int mmc_regulator_set_ocr(struct regulator *supply, unsigned short vdd_bit);
+int mmc_regulator_set_ocr(struct mmc_host *mmc,
+			struct regulator *supply,
+			unsigned short vdd_bit);
+#else
+static inline int mmc_regulator_get_ocrmask(struct regulator *supply)
+{
+	return 0;
+}
+
+static inline int mmc_regulator_set_ocr(struct mmc_host *mmc,
+				 struct regulator *supply,
+				 unsigned short vdd_bit)
+{
+	return 0;
+}
+#endif
 
 int mmc_card_awake(struct mmc_host *host);
 int mmc_card_sleep(struct mmc_host *host);
@@ -300,6 +327,14 @@ static inline void mmc_set_disable_delay(struct mmc_host *host,
 					 unsigned int disable_delay)
 {
 	host->disable_delay = disable_delay;
+}
+
+/* Module parameter */
+extern int mmc_assume_removable;
+
+static inline int mmc_card_is_removable(struct mmc_host *host)
+{
+	return !(host->caps & MMC_CAP_NONREMOVABLE) && mmc_assume_removable;
 }
 
 #endif

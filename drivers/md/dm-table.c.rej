@@ -1,0 +1,14 @@
+--- drivers/md/dm-table.c
++++ drivers/md/dm-table.c
+@@ -1130,11 +1124,6 @@
+ 	 */
+ 	q->limits = *limits;
+ 
+-	if (limits->no_cluster)
+-		queue_flag_clear_unlocked(QUEUE_FLAG_CLUSTER, q);
+-	else
+-		queue_flag_set_unlocked(QUEUE_FLAG_CLUSTER, q);
+-
+ 	if (!dm_table_supports_discards(t))
+ 		queue_flag_clear_unlocked(QUEUE_FLAG_DISCARD, q);
+ 	else

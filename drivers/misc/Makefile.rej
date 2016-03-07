@@ -1,0 +1,18 @@
+--- drivers/misc/Makefile
++++ drivers/misc/Makefile
+@@ -16,6 +16,8 @@
+ obj-$(CONFIG_TIFM_7XX1)       	+= tifm_7xx1.o
+ obj-$(CONFIG_PHANTOM)		+= phantom.o
+ obj-$(CONFIG_SENSORS_BH1780)	+= bh1780gli.o
++obj-$(CONFIG_SENSORS_BH1770)	+= bh1770glc.o
++obj-$(CONFIG_SENSORS_APDS990X)	+= apds990x.o
+ obj-$(CONFIG_SGI_IOC4)		+= ioc4.o
+ obj-$(CONFIG_ENCLOSURE_SERVICES) += enclosure.o
+ obj-$(CONFIG_KGDB_TESTS)	+= kgdbts.o
+@@ -37,3 +41,6 @@
+ obj-y				+= cb710/
+ obj-$(CONFIG_VMWARE_BALLOON)	+= vmw_balloon.o
+ obj-$(CONFIG_ARM_CHARLCD)	+= arm-charlcd.o
++obj-$(CONFIG_PCH_PHUB)		+= pch_phub.o
++obj-y				+= ti-st/
++obj-$(CONFIG_AB8500_PWM)	+= ab8500-pwm.o

@@ -1,0 +1,44 @@
+--- include/linux/pm_runtime.h
++++ include/linux/pm_runtime.h
+@@ -77,22 +87,33 @@
+ 
+ static inline bool pm_runtime_suspended(struct device *dev)
+ {
+-	return dev->power.runtime_status == RPM_SUSPENDED;
++	return dev->power.runtime_status == RPM_SUSPENDED
++		&& !dev->power.disable_depth;
++}
++
++static inline void pm_runtime_mark_last_busy(struct device *dev)
++{
++	ACCESS_ONCE(dev->power.last_busy) = jiffies;
+ }
+ 
+ #else /* !CONFIG_PM_RUNTIME */
+ 
+-static inline int pm_runtime_idle(struct device *dev) { return -ENOSYS; }
+-static inline int pm_runtime_suspend(struct device *dev) { return -ENOSYS; }
+-static inline int pm_runtime_resume(struct device *dev) { return 0; }
+-static inline int pm_request_idle(struct device *dev) { return -ENOSYS; }
++static inline int __pm_runtime_idle(struct device *dev, int rpmflags)
++{
++	return -ENOSYS;
++}
++static inline int __pm_runtime_suspend(struct device *dev, int rpmflags)
++{
++	return -ENOSYS;
++}
++static inline int __pm_runtime_resume(struct device *dev, int rpmflags)
++{
++	return 1;
++}
+ static inline int pm_schedule_suspend(struct device *dev, unsigned int delay)
+ {
+ 	return -ENOSYS;
+ }
+-static inline int pm_request_resume(struct device *dev) { return 0; }
+-static inline int __pm_runtime_get(struct device *dev, bool sync) { return 1; }
+-static inline int __pm_runtime_put(struct device *dev, bool sync) { return 0; }
+ static inline int __pm_runtime_set_status(struct device *dev,
+ 					    unsigned int status) { return 0; }
+ static inline int pm_runtime_barrier(struct device *dev) { return 0; }

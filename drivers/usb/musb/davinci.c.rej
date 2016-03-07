@@ -1,0 +1,18 @@
+--- drivers/usb/musb/davinci.c
++++ drivers/usb/musb/davinci.c
+@@ -446,6 +446,7 @@
+ fail:
+ 	clk_disable(musb->clock);
+ 
++	otg_put_transceiver(musb->xceiv);
+ 	usb_nop_xceiv_unregister();
+ 	return -ENODEV;
+ }
+@@ -496,6 +497,7 @@
+ 
+ 	clk_disable(musb->clock);
+ 
++	otg_put_transceiver(musb->xceiv);
+ 	usb_nop_xceiv_unregister();
+ 
+ 	return 0;

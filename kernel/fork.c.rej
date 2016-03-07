@@ -1,0 +1,10 @@
+--- kernel/fork.c
++++ kernel/fork.c
+@@ -273,6 +274,7 @@
+ 
+ 	setup_thread_stack(tsk, orig);
+ 	clear_user_return_notifier(tsk);
++	clear_tsk_need_resched(tsk);
+ 	stackend = end_of_stack(tsk);
+ 	*stackend = STACK_END_MAGIC;	/* for overflow detection */
+ 

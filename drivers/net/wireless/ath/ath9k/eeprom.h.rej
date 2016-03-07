@@ -1,0 +1,22 @@
+--- drivers/net/wireless/ath/ath9k/eeprom.h
++++ drivers/net/wireless/ath/ath9k/eeprom.h
+@@ -544,18 +555,10 @@
+ 	u8 tPow2x[8];
+ } __packed;
+ 
+-
+-#ifdef __BIG_ENDIAN_BITFIELD
+ struct cal_ctl_edges {
+ 	u8 bChannel;
+-	u8 flag:2, tPower:6;
++	u8 ctl;
+ } __packed;
+-#else
+-struct cal_ctl_edges {
+-	u8 bChannel;
+-	u8 tPower:6, flag:2;
+-} __packed;
+-#endif
+ 
+ struct cal_data_op_loop_ar9287 {
+ 	u8 pwrPdg[2][5];

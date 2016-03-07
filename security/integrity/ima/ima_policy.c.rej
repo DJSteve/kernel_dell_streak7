@@ -1,0 +1,11 @@
+--- security/integrity/ima/ima_policy.c
++++ security/integrity/ima/ima_policy.c
+@@ -253,6 +253,8 @@
+ 	result = security_filter_rule_init(entry->lsm[lsm_rule].type,
+ 					   Audit_equal, args,
+ 					   &entry->lsm[lsm_rule].rule);
++	if (!entry->lsm[lsm_rule].rule)
++		return -EINVAL;
+ 	return result;
+ }
+ 

@@ -445,6 +445,20 @@ out:
 }
 EXPORT_SYMBOL(clk_round_rate);
 
+long clk_round_rate(struct clk *c, unsigned long rate)
+{
+	pr_debug("%s: %s\n", __func__, c->name);
+
+	if (!c->ops || !c->ops->round_rate)
+		return -ENOSYS;
+
+	if (rate > c->max_rate)
+		rate = c->max_rate;
+
+	return c->ops->round_rate(c, rate);
+}
+EXPORT_SYMBOL(clk_round_rate);
+
 static int tegra_clk_init_one_from_table(struct tegra_clk_init_table *table)
 {
 	struct clk *c;

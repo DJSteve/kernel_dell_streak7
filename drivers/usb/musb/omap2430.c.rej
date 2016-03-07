@@ -1,0 +1,9 @@
+--- drivers/usb/musb/omap2430.c
++++ drivers/usb/musb/omap2430.c
+@@ -320,5 +320,6 @@
+ 
+ 	musb_platform_suspend(musb);
+ 
++	otg_put_transceiver(musb->xceiv);
+ 	return 0;
+ }

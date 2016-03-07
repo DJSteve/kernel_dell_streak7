@@ -1,0 +1,15 @@
+--- drivers/md/raid1.c
++++ drivers/md/raid1.c
+@@ -1157,10 +1108,11 @@
+ 			err = -EBUSY;
+ 			goto abort;
+ 		}
+-		/* Only remove non-faulty devices is recovery
++		/* Only remove non-faulty devices if recovery
+ 		 * is not possible.
+ 		 */
+ 		if (!test_bit(Faulty, &rdev->flags) &&
++		    !mddev->recovery_disabled &&
+ 		    mddev->degraded < conf->raid_disks) {
+ 			err = -EBUSY;
+ 			goto abort;

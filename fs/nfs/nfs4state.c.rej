@@ -1,0 +1,30 @@
+--- fs/nfs/nfs4state.c
++++ fs/nfs/nfs4state.c
+@@ -1148,16 +1158,14 @@
+ 		(void)ops->reclaim_complete(clp);
+ }
+ 
+-static void nfs4_state_end_reclaim_reboot(struct nfs_client *clp)
++static int nfs4_state_clear_reclaim_reboot(struct nfs_client *clp)
+ {
+ 	struct nfs4_state_owner *sp;
+ 	struct rb_node *pos;
+ 	struct nfs4_state *state;
+ 
+ 	if (!test_and_clear_bit(NFS4CLNT_RECLAIM_REBOOT, &clp->cl_state))
+-		return;
+-
+-	nfs4_reclaim_complete(clp, clp->cl_mvops->reboot_recovery_ops);
++		return 0;
+ 
+ 	for (pos = rb_first(&clp->cl_state_owners); pos != NULL; pos = rb_next(pos)) {
+ 		sp = rb_entry(pos, struct nfs4_state_owner, so_client_node);
+@@ -1213,7 +1237,7 @@
+ 		case -NFS4ERR_STALE_CLIENTID:
+ 		case -NFS4ERR_LEASE_MOVED:
+ 			set_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state);
+-			nfs4_state_end_reclaim_reboot(clp);
++			nfs4_state_clear_reclaim_reboot(clp);
+ 			nfs4_state_start_reclaim_reboot(clp);
+ 			break;
+ 		case -NFS4ERR_EXPIRED:

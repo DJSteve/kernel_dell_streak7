@@ -1,0 +1,11 @@
+--- fs/proc/base.c
++++ fs/proc/base.c
+@@ -1574,7 +1622,7 @@
+ 	if (!tmp)
+ 		return -ENOMEM;
+ 
+-	pathname = d_path_with_unreachable(path, tmp, PAGE_SIZE);
++	pathname = d_path(path, tmp, PAGE_SIZE);
+ 	len = PTR_ERR(pathname);
+ 	if (IS_ERR(pathname))
+ 		goto out;

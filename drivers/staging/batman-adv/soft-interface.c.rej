@@ -1,0 +1,95 @@
+--- drivers/staging/batman-adv/soft-interface.c
++++ drivers/staging/batman-adv/soft-interface.c
+@@ -171,75 +163,39 @@
+ 
+ 	/* unicast packet */
+ 	} else {
+-		spin_lock_irqsave(&orig_hash_lock, flags);
+-		/* get routing information */
+-		orig_node = ((struct orig_node *)hash_find(orig_hash,
+-							   ethhdr->h_dest));
+-
+-		/* check for hna host */
+-		if (!orig_node)
+-			orig_node = transtable_search(ethhdr->h_dest);
+-
+-		router = find_router(orig_node, NULL);
+-
+-		if (!router)
+-			goto unlock;
+-
+-		/* don't lock while sending the packets ... we therefore
+-		 * copy the required data before sending */
+-
+-		batman_if = router->if_incoming;
+-		memcpy(dstaddr, router->addr, ETH_ALEN);
+-
+-		spin_unlock_irqrestore(&orig_hash_lock, flags);
+-
+-		if (batman_if->if_status != IF_ACTIVE)
+-			goto dropped;
+-
+-		if (my_skb_push(skb, sizeof(struct unicast_packet)) < 0)
+-			goto dropped;
+-
+-		unicast_packet = (struct unicast_packet *)skb->data;
+-
+-		unicast_packet->version = COMPAT_VERSION;
+-		/* batman packet type: unicast */
+-		unicast_packet->packet_type = BAT_UNICAST;
+-		/* set unicast ttl */
+-		unicast_packet->ttl = TTL;
+-		/* copy the destination for faster routing */
+-		memcpy(unicast_packet->dest, orig_node->orig, ETH_ALEN);
+-
+-		send_skb_packet(skb, batman_if, dstaddr);
++		ret = unicast_send_skb(skb, bat_priv);
++		if (ret != 0)
++			goto dropped_freed;
+ 	}
+ 
+-	priv->stats.tx_packets++;
+-	priv->stats.tx_bytes += data_len;
++	bat_priv->stats.tx_packets++;
++	bat_priv->stats.tx_bytes += data_len;
+ 	goto end;
+ 
+-unlock:
+-	spin_unlock_irqrestore(&orig_hash_lock, flags);
+ dropped:
+-	priv->stats.tx_dropped++;
+ 	kfree_skb(skb);
++dropped_freed:
++	bat_priv->stats.tx_dropped++;
+ end:
+ 	return NETDEV_TX_OK;
+ }
+ 
+-void interface_rx(struct sk_buff *skb, int hdr_size)
++void interface_rx(struct net_device *soft_iface,
++		  struct sk_buff *skb, int hdr_size)
+ {
+-	struct net_device *dev = soft_device;
+-	struct bat_priv *priv = netdev_priv(dev);
++	struct bat_priv *priv = netdev_priv(soft_iface);
+ 
+ 	/* check if enough space is available for pulling, and pull */
+-	if (!pskb_may_pull(skb, hdr_size)) {
+-		kfree_skb(skb);
+-		return;
+-	}
++	if (!pskb_may_pull(skb, hdr_size))
++		goto dropped;
++
+ 	skb_pull_rcsum(skb, hdr_size);
+ /*	skb_set_mac_header(skb, -sizeof(struct ethhdr));*/
+ 
+-	skb->dev = dev;
+-	skb->protocol = eth_type_trans(skb, dev);
++	/* skb->dev & skb->pkt_type are set here */
++	if (unlikely(!pskb_may_pull(skb, ETH_HLEN)))
++		goto dropped;
++	skb->protocol = eth_type_trans(skb, soft_iface);
+ 
+ 	/* should not be neccesary anymore as we use skb_pull_rcsum()
+ 	 * TODO: please verify this and remove this TODO

@@ -1,0 +1,11 @@
+--- drivers/watchdog/rdc321x_wdt.c
++++ drivers/watchdog/rdc321x_wdt.c
+@@ -231,7 +231,7 @@
+ 	struct resource *r;
+ 	struct rdc321x_wdt_pdata *pdata;
+ 
+-	pdata = pdev->dev.platform_data;
++	pdata = platform_get_drvdata(pdev);
+ 	if (!pdata) {
+ 		dev_err(&pdev->dev, "no platform data supplied\n");
+ 		return -ENODEV;

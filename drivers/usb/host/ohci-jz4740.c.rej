@@ -1,0 +1,8 @@
+--- drivers/usb/host/ohci-jz4740.c
++++ drivers/usb/host/ohci-jz4740.c
+@@ -273,4 +273,4 @@
+ 	},
+ };
+ 
+-MODULE_ALIAS("platfrom:jz4740-ohci");
++MODULE_ALIAS("platform:jz4740-ohci");

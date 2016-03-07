@@ -1,0 +1,26 @@
+--- include/linux/percpu_counter.h
++++ include/linux/percpu_counter.h
+@@ -78,6 +78,11 @@
+ 	return 1;
+ }
+ 
++static inline int percpu_counter_initialized(struct percpu_counter *fbc)
++{
++	return (fbc->counters != NULL);
++}
++
+ #else
+ 
+ struct percpu_counter {
+@@ -143,6 +148,11 @@
+ 	return percpu_counter_read(fbc);
+ }
+ 
++static inline int percpu_counter_initialized(struct percpu_counter *fbc)
++{
++	return 1;
++}
++
+ #endif	/* CONFIG_SMP */
+ 
+ static inline void percpu_counter_inc(struct percpu_counter *fbc)

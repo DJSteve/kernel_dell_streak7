@@ -1,0 +1,32 @@
+--- drivers/net/jme.c
++++ drivers/net/jme.c
+@@ -1606,10 +1617,12 @@
+ 
+ 	jme_start_irq(jme);
+ 
+-	if (test_bit(JME_FLAG_SSET, &jme->flags))
++	if (test_bit(JME_FLAG_SSET, &jme->flags)) {
++		jme_phy_on(jme);
+ 		jme_set_settings(netdev, &jme->old_ecmd);
+-	else
++	} else {
+ 		jme_reset_phy_processor(jme);
++	}
+ 
+ 	jme_reset_link(jme);
+ 
+@@ -3062,10 +3120,12 @@
+ 	jme_clear_pm(jme);
+ 	pci_restore_state(pdev);
+ 
+-	if (test_bit(JME_FLAG_SSET, &jme->flags))
++	if (test_bit(JME_FLAG_SSET, &jme->flags)) {
++		jme_phy_on(jme);
+ 		jme_set_settings(netdev, &jme->old_ecmd);
+-	else
++	} else {
+ 		jme_reset_phy_processor(jme);
++	}
+ 
+ 	jme_start_irq(jme);
+ 	netif_device_attach(netdev);

@@ -1,0 +1,11 @@
+--- drivers/net/wireless/rt2x00/rt2x00dev.c
++++ drivers/net/wireless/rt2x00/rt2x00dev.c
+@@ -723,7 +736,7 @@
+ 	for (i = 0; i < spec->num_channels; i++) {
+ 		rt2x00lib_channel(&channels[i],
+ 				  spec->channels[i].channel,
+-				  spec->channels_info[i].tx_power1, i);
++				  spec->channels_info[i].max_power, i);
+ 	}
+ 
+ 	/*

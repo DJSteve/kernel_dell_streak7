@@ -1,0 +1,365 @@
+--- drivers/net/wireless/ath/ath9k/main.c
++++ drivers/net/wireless/ath/ath9k/main.c
+@@ -244,8 +276,12 @@
+ 	 * the relevant bits of the h/w.
+ 	 */
+ 	ath9k_hw_set_interrupts(ah, 0);
+-	ath_drain_all_txq(sc, false);
+-	stopped = ath_stoprecv(sc);
++	stopped = ath_drain_all_txq(sc, false);
++
++	spin_lock_bh(&sc->rx.pcu_lock);
++
++	if (!ath_stoprecv(sc))
++		stopped = false;
+ 
+ 	/* XXX: do not flush receive queue here. We don't want
+ 	 * to flush data frames already in queue because of
+@@ -272,6 +309,7 @@
+ 			  "reset status %d\n",
+ 			  channel->center_freq, r);
+ 		spin_unlock_bh(&sc->sc_resetlock);
++		spin_unlock_bh(&sc->rx.pcu_lock);
+ 		goto ps_restore;
+ 	}
+ 	spin_unlock_bh(&sc->sc_resetlock);
+@@ -280,17 +318,19 @@
+ 		ath_print(common, ATH_DBG_FATAL,
+ 			  "Unable to restart recv logic\n");
+ 		r = -EIO;
++		spin_unlock_bh(&sc->rx.pcu_lock);
+ 		goto ps_restore;
+ 	}
+ 
+-	ath_cache_conf_rate(sc, &hw->conf);
++	spin_unlock_bh(&sc->rx.pcu_lock);
++
+ 	ath_update_txpow(sc);
+ 	ath9k_hw_set_interrupts(ah, ah->imask);
+ 
+-	if (!(sc->sc_flags & (SC_OP_OFFCHANNEL | SC_OP_SCANNING))) {
+-		ath_start_ani(common);
+-		ieee80211_queue_delayed_work(sc->hw, &sc->tx_complete_work, 0);
++	if (!(sc->sc_flags & (SC_OP_OFFCHANNEL))) {
+ 		ath_beacon_config(sc, NULL);
++		ieee80211_queue_delayed_work(sc->hw, &sc->tx_complete_work, 0);
++		ath_start_ani(common);
+ 	}
+ 
+  ps_restore:
+@@ -302,6 +342,7 @@
+ {
+ 	struct ath_hw *ah = sc->sc_ah;
+ 	struct ath9k_hw_cal_data *caldata = ah->caldata;
++	struct ath_common *common = ath9k_hw_common(ah);
+ 	int chain;
+ 
+ 	if (!caldata || !caldata->paprd_done)
+@@ -310,7 +351,7 @@
+ 	ath9k_ps_wakeup(sc);
+ 	ar9003_paprd_enable(ah, false);
+ 	for (chain = 0; chain < AR9300_MAX_CHAINS; chain++) {
+-		if (!(ah->caps.tx_chainmask & BIT(chain)))
++		if (!(common->tx_chainmask & BIT(chain)))
+ 			continue;
+ 
+ 		ar9003_paprd_populate_single_table(ah, caldata, chain);
+@@ -332,6 +373,7 @@
+ 	struct ieee80211_supported_band *sband = &sc->sbands[band];
+ 	struct ath_tx_control txctl;
+ 	struct ath9k_hw_cal_data *caldata = ah->caldata;
++	struct ath_common *common = ath9k_hw_common(ah);
+ 	int qnum, ftype;
+ 	int chain_ok = 0;
+ 	int chain;
+@@ -365,7 +407,7 @@
+ 	ath9k_ps_wakeup(sc);
+ 	ar9003_paprd_init_table(ah);
+ 	for (chain = 0; chain < AR9300_MAX_CHAINS; chain++) {
+-		if (!(ah->caps.tx_chainmask & BIT(chain)))
++		if (!(common->tx_chainmask & BIT(chain)))
+ 			continue;
+ 
+ 		chain_ok = 0;
+@@ -583,7 +625,7 @@
+ 
+ 		msleep(1);
+ 	}
+-	ath_reset(sc, false);
++	ath_reset(sc, true);
+ 
+ out:
+ 	ath9k_ps_restore(sc);
+@@ -601,7 +643,7 @@
+ 	ath9k_ps_wakeup(sc);
+ 
+ 	if (status & ATH9K_INT_FATAL) {
+-		ath_reset(sc, false);
++		ath_reset(sc, true);
+ 		ath9k_ps_restore(sc);
+ 		return;
+ 	}
+@@ -616,7 +658,7 @@
+ 		rxmask = (ATH9K_INT_RX | ATH9K_INT_RXEOL | ATH9K_INT_RXORN);
+ 
+ 	if (status & rxmask) {
+-		spin_lock_bh(&sc->rx.rxflushlock);
++		spin_lock_bh(&sc->rx.pcu_lock);
+ 
+ 		/* Check for high priority Rx first */
+ 		if ((ah->caps.hw_caps & ATH9K_HW_CAP_EDMA) &&
+@@ -624,7 +666,7 @@
+ 			ath_rx_tasklet(sc, 0, true);
+ 
+ 		ath_rx_tasklet(sc, 0, false);
+-		spin_unlock_bh(&sc->rx.rxflushlock);
++		spin_unlock_bh(&sc->rx.pcu_lock);
+ 	}
+ 
+ 	if (status & ATH9K_INT_TX) {
+@@ -879,6 +929,7 @@
+ 	if (!ah->curchan)
+ 		ah->curchan = ath_get_curchannel(sc, sc->hw);
+ 
++	spin_lock_bh(&sc->rx.pcu_lock);
+ 	spin_lock_bh(&sc->sc_resetlock);
+ 	r = ath9k_hw_reset(ah, ah->curchan, ah->caldata, false);
+ 	if (r) {
+@@ -893,8 +944,10 @@
+ 	if (ath_startrecv(sc) != 0) {
+ 		ath_print(common, ATH_DBG_FATAL,
+ 			  "Unable to restart recv logic\n");
++		spin_unlock_bh(&sc->rx.pcu_lock);
+ 		return;
+ 	}
++	spin_unlock_bh(&sc->rx.pcu_lock);
+ 
+ 	if (sc->sc_flags & SC_OP_BEACONS)
+ 		ath_beacon_config(sc, NULL);	/* restart beacons */
+@@ -933,6 +986,9 @@
+ 	ath9k_hw_set_interrupts(ah, 0);
+ 
+ 	ath_drain_all_txq(sc, false);	/* clear pending tx frames */
++
++	spin_lock_bh(&sc->rx.pcu_lock);
++
+ 	ath_stoprecv(sc);		/* turn off frame recv */
+ 	ath_flushrecv(sc);		/* flush recv queue */
+ 
+@@ -950,6 +1006,9 @@
+ 	spin_unlock_bh(&sc->sc_resetlock);
+ 
+ 	ath9k_hw_phy_disable(ah);
++
++	spin_unlock_bh(&sc->rx.pcu_lock);
++
+ 	ath9k_hw_configpcipowersave(ah, 1, 1);
+ 	ath9k_ps_restore(sc);
+ 	ath9k_setpower(sc, ATH9K_PM_FULL_SLEEP);
+@@ -969,6 +1028,9 @@
+ 
+ 	ath9k_hw_set_interrupts(ah, 0);
+ 	ath_drain_all_txq(sc, retry_tx);
++
++	spin_lock_bh(&sc->rx.pcu_lock);
++
+ 	ath_stoprecv(sc);
+ 	ath_flushrecv(sc);
+ 
+@@ -983,16 +1045,16 @@
+ 		ath_print(common, ATH_DBG_FATAL,
+ 			  "Unable to start recv logic\n");
+ 
++	spin_unlock_bh(&sc->rx.pcu_lock);
++
+ 	/*
+ 	 * We may be doing a reset in response to a request
+ 	 * that changes the channel so update any state that
+ 	 * might change as a result.
+ 	 */
+-	ath_cache_conf_rate(sc, &hw->conf);
+-
+ 	ath_update_txpow(sc);
+ 
+-	if (sc->sc_flags & SC_OP_BEACONS)
++	if ((sc->sc_flags & SC_OP_BEACONS) || !(sc->sc_flags & (SC_OP_OFFCHANNEL)))
+ 		ath_beacon_config(sc, NULL);	/* restart beacons */
+ 
+ 	ath9k_hw_set_interrupts(ah, ah->imask);
+@@ -1147,6 +1209,7 @@
+ 	 * be followed by initialization of the appropriate bits
+ 	 * and then setup of the interrupt mask.
+ 	 */
++	spin_lock_bh(&sc->rx.pcu_lock);
+ 	spin_lock_bh(&sc->sc_resetlock);
+ 	r = ath9k_hw_reset(ah, init_channel, ah->caldata, false);
+ 	if (r) {
+@@ -1155,6 +1218,7 @@
+ 			  "(freq %u MHz)\n", r,
+ 			  curchan->center_freq);
+ 		spin_unlock_bh(&sc->sc_resetlock);
++		spin_unlock_bh(&sc->rx.pcu_lock);
+ 		goto mutex_unlock;
+ 	}
+ 	spin_unlock_bh(&sc->sc_resetlock);
+@@ -1176,8 +1240,10 @@
+ 		ath_print(common, ATH_DBG_FATAL,
+ 			  "Unable to start recv logic\n");
+ 		r = -EIO;
++		spin_unlock_bh(&sc->rx.pcu_lock);
+ 		goto mutex_unlock;
+ 	}
++	spin_unlock_bh(&sc->rx.pcu_lock);
+ 
+ 	/* Setup our intr mask. */
+ 	ah->imask = ATH9K_INT_TX | ATH9K_INT_RXEOL |
+@@ -1379,12 +1445,14 @@
+ 	 * before setting the invalid flag. */
+ 	ath9k_hw_set_interrupts(ah, 0);
+ 
++	spin_lock_bh(&sc->rx.pcu_lock);
+ 	if (!(sc->sc_flags & SC_OP_INVALID)) {
+ 		ath_drain_all_txq(sc, false);
+ 		ath_stoprecv(sc);
+ 		ath9k_hw_phy_disable(ah);
+ 	} else
+ 		sc->rx.rxlink = NULL;
++	spin_unlock_bh(&sc->rx.pcu_lock);
+ 
+ 	/* disable HAL and put h/w to sleep */
+ 	ath9k_hw_disable(ah);
+@@ -1493,7 +1558,6 @@
+ 	struct ath_softc *sc = aphy->sc;
+ 	struct ath_common *common = ath9k_hw_common(sc->sc_ah);
+ 	struct ath_vif *avp = (void *)vif->drv_priv;
+-	int i;
+ 
+ 	ath_print(common, ATH_DBG_CONFIG, "Detach Interface\n");
+ 
+@@ -1507,21 +1571,24 @@
+ 	if ((sc->sc_ah->opmode == NL80211_IFTYPE_AP) ||
+ 	    (sc->sc_ah->opmode == NL80211_IFTYPE_ADHOC) ||
+ 	    (sc->sc_ah->opmode == NL80211_IFTYPE_MESH_POINT)) {
++		/* Disable SWBA interrupt */
++		sc->sc_ah->imask &= ~ATH9K_INT_SWBA;
+ 		ath9k_ps_wakeup(sc);
++		ath9k_hw_set_interrupts(sc->sc_ah, sc->sc_ah->imask);
+ 		ath9k_hw_stoptxdma(sc->sc_ah, sc->beacon.beaconq);
+ 		ath9k_ps_restore(sc);
++		tasklet_kill(&sc->bcon_tasklet);
+ 	}
+ 
+ 	ath_beacon_return(sc, avp);
+ 	sc->sc_flags &= ~SC_OP_BEACONS;
+ 
+-	for (i = 0; i < ARRAY_SIZE(sc->beacon.bslot); i++) {
+-		if (sc->beacon.bslot[i] == vif) {
+-			printk(KERN_DEBUG "%s: vif had allocated beacon "
+-			       "slot\n", __func__);
+-			sc->beacon.bslot[i] = NULL;
+-			sc->beacon.bslot_aphy[i] = NULL;
+-		}
++	if (sc->nbcnvifs) {
++		/* Re-enable SWBA interrupt */
++		sc->sc_ah->imask |= ATH9K_INT_SWBA;
++		ath9k_ps_wakeup(sc);
++		ath9k_hw_set_interrupts(sc->sc_ah, sc->sc_ah->imask);
++		ath9k_ps_restore(sc);
+ 	}
+ 
+ 	sc->nvifs--;
+@@ -1614,48 +1701,35 @@
+ 	 * IEEE80211_CONF_CHANGE_PS is only passed by mac80211 for STA mode.
+ 	 */
+ 	if (changed & IEEE80211_CONF_CHANGE_PS) {
+-		if (conf->flags & IEEE80211_CONF_PS) {
+-			sc->ps_flags |= PS_ENABLED;
+-			/*
+-			 * At this point we know hardware has received an ACK
+-			 * of a previously sent null data frame.
+-			 */
+-			if ((sc->ps_flags & PS_NULLFUNC_COMPLETED)) {
+-				sc->ps_flags &= ~PS_NULLFUNC_COMPLETED;
+-				ath9k_enable_ps(sc);
+-                        }
+-		} else {
+-			sc->ps_enabled = false;
+-			sc->ps_flags &= ~(PS_ENABLED |
+-					  PS_NULLFUNC_COMPLETED);
+-			ath9k_setpower(sc, ATH9K_PM_AWAKE);
+-			if (!(ah->caps.hw_caps &
+-			      ATH9K_HW_CAP_AUTOSLEEP)) {
+-				ath9k_hw_setrxabort(sc->sc_ah, 0);
+-				sc->ps_flags &= ~(PS_WAIT_FOR_BEACON |
+-						  PS_WAIT_FOR_CAB |
+-						  PS_WAIT_FOR_PSPOLL_DATA |
+-						  PS_WAIT_FOR_TX_ACK);
+-				if (ah->imask & ATH9K_INT_TIM_TIMER) {
+-					ah->imask &= ~ATH9K_INT_TIM_TIMER;
+-					ath9k_hw_set_interrupts(sc->sc_ah,
+-							ah->imask);
+-				}
+-			}
+-		}
++		unsigned long flags;
++		spin_lock_irqsave(&sc->sc_pm_lock, flags);
++		if (conf->flags & IEEE80211_CONF_PS)
++			ath9k_enable_ps(sc);
++		else
++			ath9k_disable_ps(sc);
++		spin_unlock_irqrestore(&sc->sc_pm_lock, flags);
+ 	}
+ 
+ 	if (changed & IEEE80211_CONF_CHANGE_MONITOR) {
+ 		if (conf->flags & IEEE80211_CONF_MONITOR) {
+ 			ath_print(common, ATH_DBG_CONFIG,
+-				  "HW opmode set to Monitor mode\n");
+-			sc->sc_ah->opmode = NL80211_IFTYPE_MONITOR;
++				  "Monitor mode is enabled\n");
++			sc->sc_ah->is_monitoring = true;
++		} else {
++			ath_print(common, ATH_DBG_CONFIG,
++				  "Monitor mode is disabled\n");
++			sc->sc_ah->is_monitoring = false;
+ 		}
+ 	}
+ 
+ 	if (changed & IEEE80211_CONF_CHANGE_CHANNEL) {
+ 		struct ieee80211_channel *curchan = hw->conf.channel;
+ 		int pos = curchan->hw_value;
++		int old_pos = -1;
++		unsigned long flags;
++
++		if (ah->curchan)
++			old_pos = ah->curchan - &ah->channels[0];
+ 
+ 		aphy->chan_idx = pos;
+ 		aphy->chan_is_ht = conf_is_ht(conf);
+@@ -2061,8 +2170,9 @@
+ 		break;
+ 	case IEEE80211_AMPDU_TX_START:
+ 		ath9k_ps_wakeup(sc);
+-		ath_tx_aggr_start(sc, sta, tid, ssn);
+-		ieee80211_start_tx_ba_cb_irqsafe(vif, sta->addr, tid);
++		ret = ath_tx_aggr_start(sc, sta, tid, ssn);
++		if (!ret)
++			ieee80211_start_tx_ba_cb_irqsafe(vif, sta->addr, tid);
+ 		ath9k_ps_restore(sc);
+ 		break;
+ 	case IEEE80211_AMPDU_TX_STOP:
+@@ -2144,7 +2273,6 @@
+ 
+ 	aphy->state = ATH_WIPHY_SCAN;
+ 	ath9k_wiphy_pause_all_forced(sc, aphy);
+-	sc->sc_flags |= SC_OP_SCANNING;
+ 	mutex_unlock(&sc->mutex);
+ }
+ 
+@@ -2159,7 +2287,6 @@
+ 
+ 	mutex_lock(&sc->mutex);
+ 	aphy->state = ATH_WIPHY_ACTIVE;
+-	sc->sc_flags &= ~SC_OP_SCANNING;
+ 	mutex_unlock(&sc->mutex);
+ }
+ 

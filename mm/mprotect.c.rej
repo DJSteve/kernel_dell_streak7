@@ -1,0 +1,18 @@
+--- mm/mprotect.c
++++ mm/mprotect.c
+@@ -211,6 +211,7 @@
+ 	mmu_notifier_invalidate_range_end(mm, start, end);
+ 	vm_stat_account(mm, oldflags, vma->vm_file, -nrpages);
+ 	vm_stat_account(mm, newflags, vma->vm_file, nrpages);
++	perf_event_mmap(vma);
+ 	return 0;
+ 
+ fail:
+@@ -299,7 +300,6 @@
+ 		error = mprotect_fixup(vma, &prev, nstart, tmp, newflags);
+ 		if (error)
+ 			goto out;
+-		perf_event_mmap(vma);
+ 		nstart = tmp;
+ 
+ 		if (nstart < prev->vm_end)

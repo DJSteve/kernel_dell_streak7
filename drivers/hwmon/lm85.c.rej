@@ -1,0 +1,10 @@
+--- drivers/hwmon/lm85.c
++++ drivers/hwmon/lm85.c
+@@ -1280,6 +1301,7 @@
+ 	switch (data->type) {
+ 	case adm1027:
+ 	case adt7463:
++	case adt7468:
+ 	case emc6d100:
+ 	case emc6d102:
+ 		data->freq_map = adm1027_freq_map;

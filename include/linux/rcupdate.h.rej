@@ -1,0 +1,18 @@
+--- include/linux/rcupdate.h
++++ include/linux/rcupdate.h
+@@ -41,11 +41,15 @@
+ #include <linux/lockdep.h>
+ #include <linux/completion.h>
+ #include <linux/debugobjects.h>
++#include <linux/compiler.h>
+ 
+ #ifdef CONFIG_RCU_TORTURE_TEST
+ extern int rcutorture_runnable; /* for sysctl */
+ #endif /* #ifdef CONFIG_RCU_TORTURE_TEST */
+ 
++#define ULONG_CMP_GE(a, b)	(ULONG_MAX / 2 >= (a) - (b))
++#define ULONG_CMP_LT(a, b)	(ULONG_MAX / 2 < (a) - (b))
++
+ /**
+  * struct rcu_head - callback structure for use with RCU
+  * @next: next update requests in a list

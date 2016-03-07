@@ -1,0 +1,149 @@
+--- drivers/gpu/drm/radeon/r600_cs.c
++++ drivers/gpu/drm/radeon/r600_cs.c
+@@ -252,57 +322,40 @@
+ 			i, track->cb_color_info[i]);
+ 		return -EINVAL;
+ 	}
+-	/* pitch is the number of 8x8 tiles per row */
+-	pitch = G_028060_PITCH_TILE_MAX(track->cb_color_size[i]) + 1;
++	/* pitch in pixels */
++	pitch = (G_028060_PITCH_TILE_MAX(track->cb_color_size[i]) + 1) * 8;
+ 	slice_tile_max = G_028060_SLICE_TILE_MAX(track->cb_color_size[i]) + 1;
+-	height = size / (pitch * 8 * bpe);
++	slice_tile_max *= 64;
++	height = slice_tile_max / pitch;
+ 	if (height > 8192)
+ 		height = 8192;
+-	if (height > 7)
+-		height &= ~0x7;
+-	switch (G_0280A0_ARRAY_MODE(track->cb_color_info[i])) {
++	array_mode = G_0280A0_ARRAY_MODE(track->cb_color_info[i]);
++
++	base_offset = track->cb_color_bo_mc[i] + track->cb_color_bo_offset[i];
++	array_check.array_mode = array_mode;
++	array_check.group_size = track->group_size;
++	array_check.nbanks = track->nbanks;
++	array_check.npipes = track->npipes;
++	array_check.nsamples = track->nsamples;
++	array_check.bpe = bpe;
++	if (r600_get_array_mode_alignment(&array_check,
++					  &pitch_align, &height_align, &depth_align, &base_align)) {
++		dev_warn(p->dev, "%s invalid tiling %d for %d (0x%08X)\n", __func__,
++			 G_0280A0_ARRAY_MODE(track->cb_color_info[i]), i,
++			 track->cb_color_info[i]);
++		return -EINVAL;
++	}
++	switch (array_mode) {
+ 	case V_0280A0_ARRAY_LINEAR_GENERAL:
+-		/* technically height & 0x7 */
+ 		break;
+ 	case V_0280A0_ARRAY_LINEAR_ALIGNED:
+-		pitch_align = max((u32)64, (u32)(track->group_size / bpe)) / 8;
+-		if (!IS_ALIGNED(pitch, pitch_align)) {
+-			dev_warn(p->dev, "%s:%d cb pitch (%d) invalid\n",
+-				 __func__, __LINE__, pitch);
+-			return -EINVAL;
+-		}
+-		if (!IS_ALIGNED(height, 8)) {
+-			dev_warn(p->dev, "%s:%d cb height (%d) invalid\n",
+-				 __func__, __LINE__, height);
+-			return -EINVAL;
+-		}
+ 		break;
+ 	case V_0280A0_ARRAY_1D_TILED_THIN1:
+-		pitch_align = max((u32)8, (u32)(track->group_size / (8 * bpe * track->nsamples))) / 8;
+-		if (!IS_ALIGNED(pitch, pitch_align)) {
+-			dev_warn(p->dev, "%s:%d cb pitch (%d) invalid\n",
+-				 __func__, __LINE__, pitch);
+-			return -EINVAL;
+-		}
+-		if (!IS_ALIGNED(height, 8)) {
+-			dev_warn(p->dev, "%s:%d cb height (%d) invalid\n",
+-				 __func__, __LINE__, height);
+-			return -EINVAL;
+-		}
++		/* avoid breaking userspace */
++		if (height > 7)
++			height &= ~0x7;
+ 		break;
+ 	case V_0280A0_ARRAY_2D_TILED_THIN1:
+-		pitch_align = max((u32)track->nbanks,
+-				  (u32)(((track->group_size / 8) / (bpe * track->nsamples)) * track->nbanks));
+-		if (!IS_ALIGNED(pitch, pitch_align)) {
+-			dev_warn(p->dev, "%s:%d cb pitch (%d) invalid\n",
+-				__func__, __LINE__, pitch);
+-			return -EINVAL;
+-		}
+-		if (!IS_ALIGNED((height / 8), track->nbanks)) {
+-			dev_warn(p->dev, "%s:%d cb height (%d) invalid\n",
+-				 __func__, __LINE__, height);
+-			return -EINVAL;
+-		}
+ 		break;
+ 	default:
+ 		dev_warn(p->dev, "%s invalid tiling %d for %d (0x%08X)\n", __func__,
+@@ -435,39 +514,34 @@
+ 			ib[track->db_depth_size_idx] = S_028000_SLICE_TILE_MAX(tmp - 1) | (track->db_depth_size & 0x3FF);
+ 		} else {
+ 			size = radeon_bo_size(track->db_bo);
+-			pitch = G_028000_PITCH_TILE_MAX(track->db_depth_size) + 1;
+-			height = size / (pitch * 8 * bpe);
+-			height &= ~0x7;
+-			if (!height)
+-				height = 8;
+-
+-			switch (G_028010_ARRAY_MODE(track->db_depth_info)) {
++			/* pitch in pixels */
++			pitch = (G_028000_PITCH_TILE_MAX(track->db_depth_size) + 1) * 8;
++			slice_tile_max = G_028000_SLICE_TILE_MAX(track->db_depth_size) + 1;
++			slice_tile_max *= 64;
++			height = slice_tile_max / pitch;
++			if (height > 8192)
++				height = 8192;
++			base_offset = track->db_bo_mc + track->db_offset;
++			array_mode = G_028010_ARRAY_MODE(track->db_depth_info);
++			array_check.array_mode = array_mode;
++			array_check.group_size = track->group_size;
++			array_check.nbanks = track->nbanks;
++			array_check.npipes = track->npipes;
++			array_check.nsamples = track->nsamples;
++			array_check.bpe = bpe;
++			if (r600_get_array_mode_alignment(&array_check,
++							  &pitch_align, &height_align, &depth_align, &base_align)) {
++				dev_warn(p->dev, "%s invalid tiling %d (0x%08X)\n", __func__,
++					 G_028010_ARRAY_MODE(track->db_depth_info),
++					 track->db_depth_info);
++				return -EINVAL;
++			}
++			switch (array_mode) {
+ 			case V_028010_ARRAY_1D_TILED_THIN1:
+-				pitch_align = (max((u32)8, (u32)(track->group_size / (8 * bpe))) / 8);
+-				if (!IS_ALIGNED(pitch, pitch_align)) {
+-					dev_warn(p->dev, "%s:%d db pitch (%d) invalid\n",
+-						 __func__, __LINE__, pitch);
+-					return -EINVAL;
+-				}
+-				if (!IS_ALIGNED(height, 8)) {
+-					dev_warn(p->dev, "%s:%d db height (%d) invalid\n",
+-						 __func__, __LINE__, height);
+-					return -EINVAL;
+-				}
++				/* don't break userspace */
++				height &= ~0x7;
+ 				break;
+ 			case V_028010_ARRAY_2D_TILED_THIN1:
+-				pitch_align = max((u32)track->nbanks,
+-						  (u32)(((track->group_size / 8) / bpe) * track->nbanks));
+-				if (!IS_ALIGNED(pitch, pitch_align)) {
+-					dev_warn(p->dev, "%s:%d db pitch (%d) invalid\n",
+-						 __func__, __LINE__, pitch);
+-					return -EINVAL;
+-				}
+-				if ((height / 8) & (track->nbanks - 1)) {
+-					dev_warn(p->dev, "%s:%d db height (%d) invalid\n",
+-						 __func__, __LINE__, height);
+-					return -EINVAL;
+-				}
+ 				break;
+ 			default:
+ 				dev_warn(p->dev, "%s invalid tiling %d (0x%08X)\n", __func__,

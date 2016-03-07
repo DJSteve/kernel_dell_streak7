@@ -1,0 +1,15 @@
+--- drivers/mmc/core/sdio.c
++++ drivers/mmc/core/sdio.c
+@@ -761,6 +810,12 @@
+ 		err = sdio_init_func(host->card, i + 1);
+ 		if (err)
+ 			goto remove;
++
++		/*
++		 * Enable Runtime PM for this func (if supported)
++		 */
++		if (host->caps & MMC_CAP_POWER_OFF_CARD)
++			pm_runtime_enable(&card->sdio_func[i]->dev);
+ 	}
+ 
+ 	mmc_release_host(host);

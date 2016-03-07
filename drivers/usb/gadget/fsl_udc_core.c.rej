@@ -1,0 +1,11 @@
+--- drivers/usb/gadget/fsl_udc_core.c
++++ drivers/usb/gadget/fsl_udc_core.c
+@@ -287,8 +287,6 @@
+ 	temp = fsl_readl(&dr_regs->usbcmd);
+ 	temp |= USB_CMD_RUN_STOP;
+ 	fsl_writel(temp, &dr_regs->usbcmd);
+-
+-	return;
+ }
+ 
+ static void dr_controller_stop(struct fsl_udc *udc)

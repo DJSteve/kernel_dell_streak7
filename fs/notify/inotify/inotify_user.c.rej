@@ -1,0 +1,10 @@
+--- fs/notify/inotify/inotify_user.c
++++ fs/notify/inotify/inotify_user.c
+@@ -752,6 +753,7 @@
+ 	if (ret >= 0)
+ 		return ret;
+ 
++	fsnotify_put_group(group);
+ 	atomic_dec(&user->inotify_devs);
+ out_free_uid:
+ 	free_uid(user);

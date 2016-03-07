@@ -46,12 +46,17 @@ int ath9k_cmn_get_hw_crypto_keytype(struct sk_buff *skb)
 	struct ieee80211_tx_info *tx_info = IEEE80211_SKB_CB(skb);
 
 	if (tx_info->control.hw_key) {
-		if (tx_info->control.hw_key->alg == ALG_WEP)
+		switch (tx_info->control.hw_key->cipher) {
+		case WLAN_CIPHER_SUITE_WEP40:
+		case WLAN_CIPHER_SUITE_WEP104:
 			return ATH9K_KEY_TYPE_WEP;
-		else if (tx_info->control.hw_key->alg == ALG_TKIP)
+		case WLAN_CIPHER_SUITE_TKIP:
 			return ATH9K_KEY_TYPE_TKIP;
-		else if (tx_info->control.hw_key->alg == ALG_CCMP)
+		case WLAN_CIPHER_SUITE_CCMP:
 			return ATH9K_KEY_TYPE_AES;
+		default:
+			break;
+		}
 	}
 
 	return ATH9K_KEY_TYPE_CLEAR;

@@ -1,0 +1,27 @@
+--- drivers/usb/musb/musb_core.c
++++ drivers/usb/musb/musb_core.c
+@@ -1934,10 +1947,6 @@
+ 		dma_controller_destroy(c);
+ 	}
+ 
+-#ifdef CONFIG_USB_MUSB_OTG
+-	put_device(musb->xceiv->dev);
+-#endif
+-
+ #ifdef CONFIG_USB_MUSB_HDRC_HCD
+ 	usb_put_hcd(musb_to_hcd(musb));
+ #else
+@@ -2257,13 +2269,6 @@
+ 	 */
+ 	musb_exit_debugfs(musb);
+ 	musb_shutdown(pdev);
+-#ifdef CONFIG_USB_MUSB_HDRC_HCD
+-	if (musb->board_mode == MUSB_HOST)
+-		usb_remove_hcd(musb_to_hcd(musb));
+-#endif
+-	musb_writeb(musb->mregs, MUSB_DEVCTL, 0);
+-	musb_platform_exit(musb);
+-	musb_writeb(musb->mregs, MUSB_DEVCTL, 0);
+ 
+ 	musb_free(musb);
+ 	iounmap(ctrl_base);

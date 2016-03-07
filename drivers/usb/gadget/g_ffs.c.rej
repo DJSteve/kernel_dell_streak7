@@ -1,0 +1,14 @@
+--- drivers/usb/gadget/g_ffs.c
++++ drivers/usb/gadget/g_ffs.c
+@@ -52,9 +52,8 @@
+ MODULE_AUTHOR("Michal Nazarewicz");
+ MODULE_LICENSE("GPL");
+ 
+-
+-static unsigned short gfs_vendor_id    = 0x0525;	/* XXX NetChip */
+-static unsigned short gfs_product_id   = 0xa4ac;	/* XXX */
++#define GFS_VENDOR_ID	0x1d6b	/* Linux Foundation */
++#define GFS_PRODUCT_ID	0x0105	/* FunctionFS Gadget */
+ 
+ static struct usb_device_descriptor gfs_dev_desc = {
+ 	.bLength		= sizeof gfs_dev_desc,

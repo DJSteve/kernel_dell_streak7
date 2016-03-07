@@ -30,7 +30,7 @@ extern unsigned int prom_rev, prom_prev;
 /* Root node of the prom device tree, this stays constant after
  * initialization is complete.
  */
-extern int prom_root_node;
+extern phandle prom_root_node;
 
 /* Pointer to prom structure containing the device tree traversal
  * and usage utility functions.  Only prom-lib should use these,
@@ -216,13 +216,13 @@ extern int prom_inst2pkg(int);
 extern void prom_apply_obio_ranges(struct linux_prom_registers *obioregs, int nregs);
 
 /* Apply ranges of any prom node (and optionally parent node as well) to registers. */
-extern void prom_apply_generic_ranges(int node, int parent,
+extern void prom_apply_generic_ranges(phandle node, phandle parent,
 				      struct linux_prom_registers *sbusregs, int nregs);
 
 /* CPU probing helpers.  */
-int cpu_find_by_instance(int instance, int *prom_node, int *mid);
-int cpu_find_by_mid(int mid, int *prom_node);
-int cpu_get_hwmid(int prom_node);
+int cpu_find_by_instance(int instance, phandle *prom_node, int *mid);
+int cpu_find_by_mid(int mid, phandle *prom_node);
+int cpu_get_hwmid(phandle prom_node);
 
 extern spinlock_t prom_lock;
 

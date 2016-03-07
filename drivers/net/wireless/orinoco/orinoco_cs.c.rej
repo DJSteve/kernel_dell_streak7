@@ -1,0 +1,37 @@
+--- drivers/net/wireless/orinoco/orinoco_cs.c
++++ drivers/net/wireless/orinoco/orinoco_cs.c
+@@ -151,26 +54,21 @@
+ 		goto failed;
+ 	}
+ 
+-	ret = pcmcia_request_irq(link, orinoco_interrupt);
+-	if (ret)
+-		goto failed;
+-
+-	/* We initialize the hermes structure before completing PCMCIA
+-	 * configuration just in case the interrupt handler gets
+-	 * called. */
+ 	mem = ioport_map(link->resource[0]->start,
+ 			resource_size(link->resource[0]));
+ 	if (!mem)
+ 		goto failed;
+ 
++	/* We initialize the hermes structure before completing PCMCIA
++	 * configuration just in case the interrupt handler gets
++	 * called. */
+ 	hermes_struct_init(hw, mem, HERMES_16BIT_REGSPACING);
+ 
+-	/*
+-	 * This actually configures the PCMCIA socket -- setting up
+-	 * the I/O windows and the interrupt mapping, and putting the
+-	 * card and host interface into "Memory and IO" mode.
+-	 */
+-	ret = pcmcia_request_configuration(link, &link->conf);
++	ret = pcmcia_request_irq(link, orinoco_interrupt);
++	if (ret)
++		goto failed;
++
++	ret = pcmcia_enable_device(link);
+ 	if (ret)
+ 		goto failed;
+ 

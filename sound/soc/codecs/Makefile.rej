@@ -1,0 +1,7 @@
+--- sound/soc/codecs/Makefile
++++ sound/soc/codecs/Makefile
+@@ -1,3 +1,4 @@
++snd-soc-88pm860x-objs := 88pm860x-codec.o
+ snd-soc-ac97-objs := ac97.o
+ snd-soc-ad1836-objs := ad1836.o
+ snd-soc-ad193x-objs := ad193x.o

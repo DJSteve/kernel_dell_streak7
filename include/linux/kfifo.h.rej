@@ -1,0 +1,17 @@
+--- include/linux/kfifo.h
++++ include/linux/kfifo.h
+@@ -172,7 +172,13 @@
+ 
+ 
+ static inline unsigned int __must_check
+-__kfifo_must_check_helper(unsigned int val)
++__kfifo_uint_must_check_helper(unsigned int val)
++{
++	return val;
++}
++
++static inline int __must_check
++__kfifo_int_must_check_helper(int val)
+ {
+ 	return val;
+ }

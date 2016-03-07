@@ -1,0 +1,163 @@
+--- kernel/perf_event.c
++++ kernel/perf_event.c
+@@ -1620,38 +1620,48 @@
+ {
+ 	raw_spin_lock(&ctx->lock);
+ 
+-	/* Rotate the first entry last of non-pinned groups */
+-	list_rotate_left(&ctx->flexible_groups);
++	/*
++	 * Rotate the first entry last of non-pinned groups. Rotation might be
++	 * disabled by the inheritance code.
++	 */
++	if (!ctx->rotate_disable)
++		list_rotate_left(&ctx->flexible_groups);
+ 
+ 	raw_spin_unlock(&ctx->lock);
+ }
+ 
+-void perf_event_task_tick(struct task_struct *curr)
++/*
++ * perf_pmu_rotate_start() and perf_rotate_context() are fully serialized
++ * because they're strictly cpu affine and rotate_start is called with IRQs
++ * disabled, while rotate_context is called from IRQ context.
++ */
++static void perf_rotate_context(struct perf_cpu_context *cpuctx)
+ {
+-	struct perf_cpu_context *cpuctx;
+-	struct perf_event_context *ctx;
+-	int rotate = 0;
+-
+-	if (!atomic_read(&nr_events))
+-		return;
++	u64 interval = (u64)cpuctx->jiffies_interval * TICK_NSEC;
++	struct perf_event_context *ctx = NULL;
++	int rotate = 0, remove = 1;
+ 
+-	cpuctx = &__get_cpu_var(perf_cpu_context);
+-	if (cpuctx->ctx.nr_events &&
+-	    cpuctx->ctx.nr_events != cpuctx->ctx.nr_active)
+-		rotate = 1;
++	if (cpuctx->ctx.nr_events) {
++		remove = 0;
++		if (cpuctx->ctx.nr_events != cpuctx->ctx.nr_active)
++			rotate = 1;
++	}
+ 
+-	ctx = curr->perf_event_ctxp;
+-	if (ctx && ctx->nr_events && ctx->nr_events != ctx->nr_active)
+-		rotate = 1;
++	ctx = cpuctx->task_ctx;
++	if (ctx && ctx->nr_events) {
++		remove = 0;
++		if (ctx->nr_events != ctx->nr_active)
++			rotate = 1;
++	}
+ 
+-	perf_ctx_adjust_freq(&cpuctx->ctx);
++	perf_pmu_disable(cpuctx->ctx.pmu);
++	perf_ctx_adjust_freq(&cpuctx->ctx, interval);
+ 	if (ctx)
+-		perf_ctx_adjust_freq(ctx);
++		perf_ctx_adjust_freq(ctx, interval);
+ 
+ 	if (!rotate)
+-		return;
++		goto done;
+ 
+-	perf_disable();
+ 	cpu_ctx_sched_out(cpuctx, EVENT_FLEXIBLE);
+ 	if (ctx)
+ 		task_ctx_sched_out(ctx, EVENT_FLEXIBLE);
+@@ -1790,7 +1817,13 @@
+ 		unsigned long flags;
+ 
+ 		raw_spin_lock_irqsave(&ctx->lock, flags);
+-		update_context_time(ctx);
++		/*
++		 * may read while context is not active
++		 * (e.g., thread is blocked), in that case
++		 * we cannot update context time
++		 */
++		if (ctx->is_active)
++			update_context_time(ctx);
+ 		update_event_times(event);
+ 		raw_spin_unlock_irqrestore(&ctx->lock, flags);
+ 	}
+@@ -6161,32 +6733,32 @@
+ 	return ret;
+ }
+ 
+-
+ /*
+  * Initialize the perf_event context in task_struct
+  */
+-int perf_event_init_task(struct task_struct *child)
++int perf_event_init_context(struct task_struct *child, int ctxn)
+ {
+ 	struct perf_event_context *child_ctx, *parent_ctx;
+ 	struct perf_event_context *cloned_ctx;
+ 	struct perf_event *event;
+ 	struct task_struct *parent = current;
+ 	int inherited_all = 1;
++	unsigned long flags;
+ 	int ret = 0;
+ 
+-	child->perf_event_ctxp = NULL;
++	child->perf_event_ctxp[ctxn] = NULL;
+ 
+ 	mutex_init(&child->perf_event_mutex);
+ 	INIT_LIST_HEAD(&child->perf_event_list);
+ 
+-	if (likely(!parent->perf_event_ctxp))
++	if (likely(!parent->perf_event_ctxp[ctxn]))
+ 		return 0;
+ 
+ 	/*
+ 	 * If the parent's context is a clone, pin it so it won't get
+ 	 * swapped under us.
+ 	 */
+-	parent_ctx = perf_pin_task_context(parent);
++	parent_ctx = perf_pin_task_context(parent, ctxn);
+ 
+ 	/*
+ 	 * No need to check if parent_ctx != NULL here; since we saw
+@@ -6206,20 +6778,33 @@
+ 	 * the list, not manipulating it:
+ 	 */
+ 	list_for_each_entry(event, &parent_ctx->pinned_groups, group_entry) {
+-		ret = inherit_task_group(event, parent, parent_ctx, child,
+-					 &inherited_all);
++		ret = inherit_task_group(event, parent, parent_ctx,
++					 child, ctxn, &inherited_all);
+ 		if (ret)
+ 			break;
+ 	}
+ 
++	/*
++	 * We can't hold ctx->lock when iterating the ->flexible_group list due
++	 * to allocations, but we need to prevent rotation because
++	 * rotate_ctx() will change the list from interrupt context.
++	 */
++	raw_spin_lock_irqsave(&parent_ctx->lock, flags);
++	parent_ctx->rotate_disable = 1;
++	raw_spin_unlock_irqrestore(&parent_ctx->lock, flags);
++
+ 	list_for_each_entry(event, &parent_ctx->flexible_groups, group_entry) {
+-		ret = inherit_task_group(event, parent, parent_ctx, child,
+-					 &inherited_all);
++		ret = inherit_task_group(event, parent, parent_ctx,
++					 child, ctxn, &inherited_all);
+ 		if (ret)
+ 			break;
+ 	}
+ 
+-	child_ctx = child->perf_event_ctxp;
++	raw_spin_lock_irqsave(&parent_ctx->lock, flags);
++	parent_ctx->rotate_disable = 0;
++	raw_spin_unlock_irqrestore(&parent_ctx->lock, flags);
++
++	child_ctx = child->perf_event_ctxp[ctxn];
+ 
+ 	if (child_ctx && inherited_all) {
+ 		/*

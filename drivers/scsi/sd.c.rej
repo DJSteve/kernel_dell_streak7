@@ -1,0 +1,18 @@
+--- drivers/scsi/sd.c
++++ drivers/scsi/sd.c
+@@ -2321,11 +2390,10 @@
+ 	index = sdkp->index;
+ 	dev = &sdp->sdev_gendev;
+ 
+-	if (index < SD_MAX_DISKS) {
+-		gd->major = sd_major((index & 0xf0) >> 4);
+-		gd->first_minor = ((index & 0xf) << 4) | (index & 0xfff00);
+-		gd->minors = SD_MINORS;
+-	}
++	gd->major = sd_major((index & 0xf0) >> 4);
++	gd->first_minor = ((index & 0xf) << 4) | (index & 0xfff00);
++	gd->minors = SD_MINORS;
++
+ 	gd->fops = &sd_fops;
+ 	gd->private_data = &sdkp->driver;
+ 	gd->queue = sdkp->device->request_queue;

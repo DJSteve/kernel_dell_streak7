@@ -16,7 +16,7 @@ extern char prom_version[];
 /* Root node of the prom device tree, this stays constant after
  * initialization is complete.
  */
-extern int prom_root_node;
+extern phandle prom_root_node;
 
 /* PROM stdin and stdout */
 extern int prom_stdin, prom_stdout;
@@ -24,7 +24,7 @@ extern int prom_stdin, prom_stdout;
 /* /chosen node of the prom device tree, this stays constant after
  * initialization is complete.
  */
-extern int prom_chosen_node;
+extern phandle prom_chosen_node;
 
 /* Helper values and strings in arch/sparc64/kernel/head.S */
 extern const char prom_peer_name[];

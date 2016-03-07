@@ -1,0 +1,20 @@
+--- net/mac80211/ibss.c
++++ net/mac80211/ibss.c
+@@ -448,14 +469,15 @@
+ 		return NULL;
+ 
+ #ifdef CONFIG_MAC80211_VERBOSE_DEBUG
+-	printk(KERN_DEBUG "%s: Adding new IBSS station %pM (dev=%s)\n",
+-	       wiphy_name(local->hw.wiphy), addr, sdata->name);
++	wiphy_debug(local->hw.wiphy, "Adding new IBSS station %pM (dev=%s)\n",
++		    addr, sdata->name);
+ #endif
+ 
+ 	sta = sta_info_alloc(sdata, addr, gfp);
+ 	if (!sta)
+ 		return NULL;
+ 
++	sta->last_rx = jiffies;
+ 	set_sta_flags(sta, WLAN_STA_AUTHORIZED);
+ 
+ 	/* make sure mandatory rates are always added */

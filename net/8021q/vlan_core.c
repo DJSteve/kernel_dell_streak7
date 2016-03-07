@@ -70,12 +70,13 @@ int vlan_hwaccel_do_receive(struct sk_buff *skb)
 		 * This allows the VLAN to have a different MAC than the
 		 * underlying device, and still route correctly. */
 		if (!compare_ether_addr(eth_hdr(skb)->h_dest,
-					dev->dev_addr))
+					vlan_dev->dev_addr))
 			skb->pkt_type = PACKET_HOST;
 		break;
 	}
 	u64_stats_update_end(&rx_stats->syncp);
-	return 0;
+
+	return true;
 }
 
 struct net_device *vlan_dev_real_dev(const struct net_device *dev)
@@ -90,71 +91,27 @@ u16 vlan_dev_vlan_id(const struct net_device *dev)
 }
 EXPORT_SYMBOL(vlan_dev_vlan_id);
 
-static gro_result_t
-vlan_gro_common(struct napi_struct *napi, struct vlan_group *grp,
-		unsigned int vlan_tci, struct sk_buff *skb)
+/* VLAN rx hw acceleration helper.  This acts like netif_{rx,receive_skb}(). */
+int __vlan_hwaccel_rx(struct sk_buff *skb, struct vlan_group *grp,
+		      u16 vlan_tci, int polling)
 {
-	struct sk_buff *p;
-	struct net_device *vlan_dev;
-	u16 vlan_id;
-
-	if (skb_bond_should_drop(skb, ACCESS_ONCE(skb->dev->master)))
-		skb->deliver_no_wcard = 1;
-
-	skb->skb_iif = skb->dev->ifindex;
 	__vlan_hwaccel_put_tag(skb, vlan_tci);
-	vlan_id = vlan_tci & VLAN_VID_MASK;
-	vlan_dev = vlan_group_get_device(grp, vlan_id);
-
-	if (vlan_dev)
-		skb->dev = vlan_dev;
-	else if (vlan_id) {
-		if (!(skb->dev->flags & IFF_PROMISC))
-			goto drop;
-		skb->pkt_type = PACKET_OTHERHOST;
-	}
-
-	for (p = napi->gro_list; p; p = p->next) {
-		NAPI_GRO_CB(p)->same_flow =
-			p->dev == skb->dev && !compare_ether_header(
-				skb_mac_header(p), skb_gro_mac_header(skb));
-		NAPI_GRO_CB(p)->flush = 0;
-	}
-
-	return dev_gro_receive(napi, skb);
-
-drop:
-	return GRO_DROP;
+	return polling ? netif_receive_skb(skb) : netif_rx(skb);
 }
+EXPORT_SYMBOL(__vlan_hwaccel_rx);
 
 gro_result_t vlan_gro_receive(struct napi_struct *napi, struct vlan_group *grp,
 			      unsigned int vlan_tci, struct sk_buff *skb)
 {
-	if (netpoll_rx_on(skb))
-		return vlan_hwaccel_receive_skb(skb, grp, vlan_tci)
-			? GRO_DROP : GRO_NORMAL;
-
-	skb_gro_reset_offset(skb);
-
-	return napi_skb_finish(vlan_gro_common(napi, grp, vlan_tci, skb), skb);
+	__vlan_hwaccel_put_tag(skb, vlan_tci);
+	return napi_gro_receive(napi, skb);
 }
 EXPORT_SYMBOL(vlan_gro_receive);
 
 gro_result_t vlan_gro_frags(struct napi_struct *napi, struct vlan_group *grp,
 			    unsigned int vlan_tci)
 {
-	struct sk_buff *skb = napi_frags_skb(napi);
-
-	if (!skb)
-		return GRO_DROP;
-
-	if (netpoll_rx_on(skb)) {
-		skb->protocol = eth_type_trans(skb, skb->dev);
-		return vlan_hwaccel_receive_skb(skb, grp, vlan_tci)
-			? GRO_DROP : GRO_NORMAL;
-	}
-
-	return napi_frags_finish(napi, skb,
-				 vlan_gro_common(napi, grp, vlan_tci, skb));
+	__vlan_hwaccel_put_tag(napi->skb, vlan_tci);
+	return napi_gro_frags(napi);
 }
 EXPORT_SYMBOL(vlan_gro_frags);

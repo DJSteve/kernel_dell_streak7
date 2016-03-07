@@ -288,6 +288,11 @@ static struct queue_sysfs_entry queue_max_segments_entry = {
 	.show = queue_max_segments_show,
 };
 
+static struct queue_sysfs_entry queue_max_integrity_segments_entry = {
+	.attr = {.name = "max_integrity_segments", .mode = S_IRUGO },
+	.show = queue_max_integrity_segments_show,
+};
+
 static struct queue_sysfs_entry queue_max_segment_size_entry = {
 	.attr = {.name = "max_segment_size", .mode = S_IRUGO },
 	.show = queue_max_segment_size_show,
@@ -375,6 +380,7 @@ static struct attribute *default_attrs[] = {
 	&queue_max_hw_sectors_entry.attr,
 	&queue_max_sectors_entry.attr,
 	&queue_max_segments_entry.attr,
+	&queue_max_integrity_segments_entry.attr,
 	&queue_max_segment_size_entry.attr,
 	&queue_iosched_entry.attr,
 	&queue_hw_sector_size_entry.attr,
@@ -459,6 +465,8 @@ static void blk_release_queue(struct kobject *kobj)
 	struct request_list *rl = &q->rq;
 
 	blk_sync_queue(q);
+
+	blk_throtl_exit(q);
 
 	if (rl->rq_pool)
 		mempool_destroy(rl->rq_pool);

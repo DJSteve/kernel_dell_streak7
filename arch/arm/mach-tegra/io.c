@@ -73,6 +73,12 @@ static struct map_desc tegra_io_desc[] __initdata = {
 		.length = IO_SDMMC_SIZE,
 		.type = MT_DEVICE,
 	},
+	{
+		.virtual = IO_IRAM_VIRT,
+		.pfn = __phys_to_pfn(IO_IRAM_PHYS),
+		.length = IO_IRAM_SIZE,
+		.type = MT_DEVICE,
+	},
 };
 
 #ifdef CONFIG_ROUTE_PRINTK_TO_MAINLOG

@@ -1,0 +1,11 @@
+--- net/x25/x25_in.c
++++ net/x25/x25_in.c
+@@ -119,6 +119,8 @@
+ 						&x25->vc_facil_mask);
+ 			if (len > 0)
+ 				skb_pull(skb, len);
++			else
++				return -1;
+ 			/*
+ 			 *	Copy any Call User Data.
+ 			 */

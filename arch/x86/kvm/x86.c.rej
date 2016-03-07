@@ -1,0 +1,116 @@
+--- arch/x86/kvm/x86.c
++++ arch/x86/kvm/x86.c
+@@ -155,11 +157,6 @@
+ 
+ u64 __read_mostly host_xcr0;
+ 
+-static inline u32 bit(int bitno)
+-{
+-	return 1 << (bitno & 31);
+-}
+-
+ static void kvm_on_user_return(struct user_return_notifier *urn)
+ {
+ 	unsigned slot;
+@@ -2244,13 +2492,14 @@
+ 		0 /* Reserved */ | F(CX16) | 0 /* xTPR Update, PDCM */ |
+ 		0 /* Reserved, DCA */ | F(XMM4_1) |
+ 		F(XMM4_2) | F(X2APIC) | F(MOVBE) | F(POPCNT) |
+-		0 /* Reserved, AES */ | F(XSAVE) | 0 /* OSXSAVE */ | F(AVX);
++		0 /* Reserved*/ | F(AES) | F(XSAVE) | 0 /* OSXSAVE */ | F(AVX) |
++		F(F16C);
+ 	/* cpuid 0x80000001.ecx */
+ 	const u32 kvm_supported_word6_x86_features =
+-		F(LAHF_LM) | F(CMP_LEGACY) | F(SVM) | 0 /* ExtApicSpace */ |
++		F(LAHF_LM) | F(CMP_LEGACY) | 0 /*SVM*/ | 0 /* ExtApicSpace */ |
+ 		F(CR8_LEGACY) | F(ABM) | F(SSE4A) | F(MISALIGNSSE) |
+-		F(3DNOWPREFETCH) | 0 /* OSVW */ | 0 /* IBS */ | F(SSE5) |
+-		0 /* SKINIT */ | 0 /* WDT */;
++		F(3DNOWPREFETCH) | 0 /* OSVW */ | 0 /* IBS */ | F(XOP) |
++		0 /* SKINIT, WDT, LWP */ | F(FMA4) | F(TBM);
+ 
+ 	/* all calls to cpuid_count() should be made on the same cpu */
+ 	get_cpu();
+@@ -2559,6 +2809,7 @@
+ 		!kvm_exception_is_soft(vcpu->arch.exception.nr);
+ 	events->exception.nr = vcpu->arch.exception.nr;
+ 	events->exception.has_error_code = vcpu->arch.exception.has_error_code;
++	events->exception.pad = 0;
+ 	events->exception.error_code = vcpu->arch.exception.error_code;
+ 
+ 	events->interrupt.injected =
+@@ -2572,12 +2823,14 @@
+ 	events->nmi.injected = vcpu->arch.nmi_injected;
+ 	events->nmi.pending = vcpu->arch.nmi_pending;
+ 	events->nmi.masked = kvm_x86_ops->get_nmi_mask(vcpu);
++	events->nmi.pad = 0;
+ 
+ 	events->sipi_vector = vcpu->arch.sipi_vector;
+ 
+ 	events->flags = (KVM_VCPUEVENT_VALID_NMI_PENDING
+ 			 | KVM_VCPUEVENT_VALID_SIPI_VECTOR
+ 			 | KVM_VCPUEVENT_VALID_SHADOW);
++	memset(&events->reserved, 0, sizeof(events->reserved));
+ }
+ 
+ static int kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
+@@ -2622,6 +2877,7 @@
+ 	dbgregs->dr6 = vcpu->arch.dr6;
+ 	dbgregs->dr7 = vcpu->arch.dr7;
+ 	dbgregs->flags = 0;
++	memset(&dbgregs->reserved, 0, sizeof(dbgregs->reserved));
+ }
+ 
+ static int kvm_vcpu_ioctl_x86_set_debugregs(struct kvm_vcpu *vcpu,
+@@ -3169,10 +3426,6 @@
+ 		struct kvm_memslots *slots, *old_slots;
+ 		unsigned long *dirty_bitmap;
+ 
+-		spin_lock(&kvm->mmu_lock);
+-		kvm_mmu_slot_remove_write_access(kvm, log->slot);
+-		spin_unlock(&kvm->mmu_lock);
+-
+ 		r = -ENOMEM;
+ 		dirty_bitmap = vmalloc(n);
+ 		if (!dirty_bitmap)
+@@ -3474,21 +3730,23 @@
+ 			goto out;
+ 
+ 		r = 0;
+-		ktime_get_ts(&now);
+-		now_ns = timespec_to_ns(&now);
++		local_irq_disable();
++		now_ns = get_kernel_ns();
+ 		delta = user_ns.clock - now_ns;
++		local_irq_enable();
+ 		kvm->arch.kvmclock_offset = delta;
+ 		break;
+ 	}
+ 	case KVM_GET_CLOCK: {
+-		struct timespec now;
+ 		struct kvm_clock_data user_ns;
+ 		u64 now_ns;
+ 
+-		ktime_get_ts(&now);
+-		now_ns = timespec_to_ns(&now);
++		local_irq_disable();
++		now_ns = get_kernel_ns();
+ 		user_ns.clock = kvm->arch.kvmclock_offset + now_ns;
++		local_irq_enable();
+ 		user_ns.flags = 0;
++		memset(&user_ns.pad, 0, sizeof(user_ns.pad));
+ 
+ 		r = -EFAULT;
+ 		if (copy_to_user(argp, &user_ns, sizeof(user_ns)))
+@@ -5521,8 +5929,10 @@
+ 
+ 	mmu_reset_needed |= kvm_read_cr4(vcpu) != sregs->cr4;
+ 	kvm_x86_ops->set_cr4(vcpu, sregs->cr4);
++	if (sregs->cr4 & X86_CR4_OSXSAVE)
++		update_cpuid(vcpu);
+ 	if (!is_long_mode(vcpu) && is_pae(vcpu)) {
+-		load_pdptrs(vcpu, vcpu->arch.cr3);
++		load_pdptrs(vcpu, vcpu->arch.walk_mmu, vcpu->arch.cr3);
+ 		mmu_reset_needed = 1;
+ 	}
+ 

@@ -1,0 +1,14 @@
+--- lib/percpu_counter.c
++++ lib/percpu_counter.c
+@@ -118,7 +161,11 @@
+ 	fbc->counters = alloc_percpu(s32);
+ 	if (!fbc->counters)
+ 		return -ENOMEM;
++
++	debug_percpu_counter_activate(fbc);
++
+ #ifdef CONFIG_HOTPLUG_CPU
++	INIT_LIST_HEAD(&fbc->list);
+ 	mutex_lock(&percpu_counters_lock);
+ 	list_add(&fbc->list, &percpu_counters);
+ 	mutex_unlock(&percpu_counters_lock);

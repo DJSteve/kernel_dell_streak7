@@ -1,0 +1,10 @@
+--- drivers/video/modedb.c
++++ drivers/video/modedb.c
+@@ -855,6 +855,7 @@
+ 			abs(cmode->yres - mode->yres);
+ 		if (diff > d) {
+ 			diff = d;
++			diff_refresh = abs(cmode->refresh - mode->refresh);
+ 			best = cmode;
+ 		} else if (diff == d) {
+ 			d = abs(cmode->refresh - mode->refresh);

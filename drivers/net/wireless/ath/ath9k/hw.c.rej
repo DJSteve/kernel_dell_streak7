@@ -1,0 +1,30 @@
+--- drivers/net/wireless/ath/ath9k/hw.c
++++ drivers/net/wireless/ath/ath9k/hw.c
+@@ -484,6 +482,7 @@
+ 		ath_print(ath9k_hw_common(ah), ATH_DBG_FATAL,
+ 			  "Failed allocating banks for "
+ 			  "external radio\n");
++		ath9k_hw_rf_free_ext_banks(ah);
+ 		return ecode;
+ 	}
+ 
+@@ -2043,14 +1737,15 @@
+ 		val = REG_READ(ah, AR7010_GPIO_IN);
+ 		return (MS(val, AR7010_GPIO_IN_VAL) & AR_GPIO_BIT(gpio)) == 0;
+ 	} else if (AR_SREV_9300_20_OR_LATER(ah))
+-		return MS_REG_READ(AR9300, gpio) != 0;
++		return (MS(REG_READ(ah, AR_GPIO_IN), AR9300_GPIO_IN_VAL) &
++			AR_GPIO_BIT(gpio)) != 0;
+ 	else if (AR_SREV_9271(ah))
+ 		return MS_REG_READ(AR9271, gpio) != 0;
+-	else if (AR_SREV_9287_10_OR_LATER(ah))
++	else if (AR_SREV_9287_11_OR_LATER(ah))
+ 		return MS_REG_READ(AR9287, gpio) != 0;
+-	else if (AR_SREV_9285_10_OR_LATER(ah))
++	else if (AR_SREV_9285_12_OR_LATER(ah))
+ 		return MS_REG_READ(AR9285, gpio) != 0;
+-	else if (AR_SREV_9280_10_OR_LATER(ah))
++	else if (AR_SREV_9280_20_OR_LATER(ah))
+ 		return MS_REG_READ(AR928X, gpio) != 0;
+ 	else
+ 		return MS_REG_READ(AR, gpio) != 0;

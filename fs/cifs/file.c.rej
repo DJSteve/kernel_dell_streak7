@@ -1,0 +1,48 @@
+--- fs/cifs/file.c
++++ fs/cifs/file.c
+@@ -352,27 +447,15 @@
+ 	    (tcon->ses->capabilities & CAP_UNIX) &&
+ 	    (CIFS_UNIX_POSIX_PATH_OPS_CAP &
+ 			le64_to_cpu(tcon->fsUnixInfo.Capability))) {
+-		int oflags = (int) cifs_posix_convert_flags(file->f_flags);
+-		oflags |= SMB_O_CREAT;
+ 		/* can not refresh inode info since size could be stale */
+ 		rc = cifs_posix_open(full_path, &inode, inode->i_sb,
+ 				cifs_sb->mnt_file_mode /* ignored */,
+-				oflags, &oplock, &netfid, xid);
++				file->f_flags, &oplock, &netfid, xid);
+ 		if (rc == 0) {
+ 			cFYI(1, "posix open succeeded");
+-			/* no need for special case handling of setting mode
+-			   on read only files needed here */
+ 
+-			rc = cifs_posix_open_inode_helper(inode, file,
+-					pCifsInode, oplock, netfid);
+-			if (rc != 0) {
+-				CIFSSMBClose(xid, tcon, netfid);
+-				goto out;
+-			}
+-
+-			pCifsFile = cifs_new_fileinfo(inode, netfid, file,
+-							file->f_path.mnt,
+-							oflags);
++			pCifsFile = cifs_new_fileinfo(netfid, file, tlink,
++						      oplock);
+ 			if (pCifsFile == NULL) {
+ 				CIFSSMBClose(xid, tcon, netfid);
+ 				rc = -ENOMEM;
+@@ -460,12 +543,11 @@
+ 		goto out;
+ 	}
+ 
+-	rc = cifs_open_inode_helper(inode, tcon, &oplock, buf, full_path, xid);
++	rc = cifs_open_inode_helper(inode, tcon, oplock, buf, full_path, xid);
+ 	if (rc != 0)
+ 		goto out;
+ 
+-	pCifsFile = cifs_new_fileinfo(inode, netfid, file, file->f_path.mnt,
+-					file->f_flags);
++	pCifsFile = cifs_new_fileinfo(netfid, file, tlink, oplock);
+ 	if (pCifsFile == NULL) {
+ 		rc = -ENOMEM;
+ 		goto out;

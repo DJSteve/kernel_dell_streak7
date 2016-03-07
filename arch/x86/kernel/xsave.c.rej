@@ -1,0 +1,12 @@
+--- arch/x86/kernel/xsave.c
++++ arch/x86/kernel/xsave.c
+@@ -394,7 +394,8 @@
+ 	 * Setup init_xstate_buf to represent the init state of
+ 	 * all the features managed by the xsave
+ 	 */
+-	init_xstate_buf = alloc_bootmem(xstate_size);
++	init_xstate_buf = alloc_bootmem_align(xstate_size,
++					      __alignof__(struct xsave_struct));
+ 	init_xstate_buf->i387.mxcsr = MXCSR_DEFAULT;
+ 
+ 	clts();

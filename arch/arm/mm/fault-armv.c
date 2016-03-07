@@ -161,6 +161,7 @@ make_coherent(struct address_space *mapping, struct vm_area_struct *vma,
 		do_adjust_pte(vma, addr, pfn, ptep);
 }
 
+#if __LINUX_ARM_ARCH__ < 6
 /*
  * Take care of architecture specific things when placing a new PTE into
  * a page table, or changing an existing PTE.  Basically, there are two
@@ -225,6 +226,7 @@ static int __init check_writebuffer(unsigned long *p1, unsigned long *p2)
 	local_irq_enable();
 	return val != zero;
 }
+#endif	/* __LINUX_ARM_ARCH__ < 6 */
 
 void __init check_writebuffer_bugs(void)
 {

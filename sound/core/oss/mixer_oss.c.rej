@@ -1,0 +1,57 @@
+--- sound/core/oss/mixer_oss.c
++++ sound/core/oss/mixer_oss.c
+@@ -618,8 +618,10 @@
+ 	if (numid == ID_UNKNOWN)
+ 		return;
+ 	down_read(&card->controls_rwsem);
+-	if ((kctl = snd_ctl_find_numid(card, numid)) == NULL)
++	if ((kctl = snd_ctl_find_numid(card, numid)) == NULL) {
++		up_read(&card->controls_rwsem);
+ 		return;
++	}
+ 	uinfo = kzalloc(sizeof(*uinfo), GFP_KERNEL);
+ 	uctl = kzalloc(sizeof(*uctl), GFP_KERNEL);
+ 	if (uinfo == NULL || uctl == NULL)
+@@ -658,7 +660,7 @@
+ 		return;
+ 	down_read(&card->controls_rwsem);
+ 	if ((kctl = snd_ctl_find_numid(card, numid)) == NULL) {
+-		up_read(&fmixer->card->controls_rwsem);
++		up_read(&card->controls_rwsem);
+ 		return;
+ 	}
+ 	uinfo = kzalloc(sizeof(*uinfo), GFP_KERNEL);
+@@ -797,7 +799,7 @@
+ 	uctl = kzalloc(sizeof(*uctl), GFP_KERNEL);
+ 	if (uinfo == NULL || uctl == NULL) {
+ 		err = -ENOMEM;
+-		goto __unlock;
++		goto __free_only;
+ 	}
+ 	down_read(&card->controls_rwsem);
+ 	kctl = snd_mixer_oss_test_id(mixer, "Capture Source", 0);
+@@ -826,6 +828,7 @@
+ 	err = 0;
+       __unlock:
+      	up_read(&card->controls_rwsem);
++      __free_only:
+       	kfree(uctl);
+       	kfree(uinfo);
+       	return err;
+@@ -847,7 +850,7 @@
+ 	uctl = kzalloc(sizeof(*uctl), GFP_KERNEL);
+ 	if (uinfo == NULL || uctl == NULL) {
+ 		err = -ENOMEM;
+-		goto __unlock;
++		goto __free_only;
+ 	}
+ 	down_read(&card->controls_rwsem);
+ 	kctl = snd_mixer_oss_test_id(mixer, "Capture Source", 0);
+@@ -880,6 +883,7 @@
+ 	err = 0;
+       __unlock:
+ 	up_read(&card->controls_rwsem);
++      __free_only:
+ 	kfree(uctl);
+ 	kfree(uinfo);
+ 	return err;

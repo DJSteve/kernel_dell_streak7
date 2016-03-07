@@ -1,0 +1,17 @@
+--- arch/x86/kernel/apic/apic.c
++++ arch/x86/kernel/apic/apic.c
+@@ -1389,6 +1438,14 @@
+ 
+ 	setup_apic_nmi_watchdog(NULL);
+ 	apic_pm_activate();
++
++	/*
++	 * Now that local APIC setup is completed for BP, configure the fault
++	 * handling for interrupt remapping.
++	 */
++	if (!smp_processor_id() && intr_remapping_enabled)
++		enable_drhd_fault_handling();
++
+ }
+ 
+ #ifdef CONFIG_X86_X2APIC

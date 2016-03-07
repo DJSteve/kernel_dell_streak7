@@ -1,0 +1,26 @@
+--- drivers/net/wireless/ath/ath9k/eeprom_def.c
++++ drivers/net/wireless/ath/ath9k/eeprom_def.c
+@@ -1063,15 +1064,19 @@
+ 	case 1:
+ 		break;
+ 	case 2:
+-		scaledPower -= REDUCE_SCALED_POWER_BY_TWO_CHAIN;
++		if (scaledPower > REDUCE_SCALED_POWER_BY_TWO_CHAIN)
++			scaledPower -= REDUCE_SCALED_POWER_BY_TWO_CHAIN;
++		else
++			scaledPower = 0;
+ 		break;
+ 	case 3:
+-		scaledPower -= REDUCE_SCALED_POWER_BY_THREE_CHAIN;
++		if (scaledPower > REDUCE_SCALED_POWER_BY_THREE_CHAIN)
++			scaledPower -= REDUCE_SCALED_POWER_BY_THREE_CHAIN;
++		else
++			scaledPower = 0;
+ 		break;
+ 	}
+ 
+-	scaledPower = max((u16)0, scaledPower);
+-
+ 	if (IS_CHAN_2GHZ(chan)) {
+ 		numCtlModes = ARRAY_SIZE(ctlModesFor11g) -
+ 			SUB_NUM_CTL_MODES_AT_2G_40;

@@ -1,0 +1,116 @@
+--- net/wireless/nl80211.c
++++ net/wireless/nl80211.c
+@@ -868,38 +983,48 @@
+ 
+ static int nl80211_set_channel(struct sk_buff *skb, struct genl_info *info)
+ {
+-	struct cfg80211_registered_device *rdev;
+-	struct net_device *netdev;
+-	int result;
++	struct cfg80211_registered_device *rdev = info->user_ptr[0];
++	struct net_device *netdev = info->user_ptr[1];
+ 
+-	rtnl_lock();
++	return __nl80211_set_channel(rdev, netdev->ieee80211_ptr, info);
++}
+ 
+-	result = get_rdev_dev_by_info_ifindex(info, &rdev, &netdev);
+-	if (result)
+-		goto unlock;
++static int nl80211_set_wds_peer(struct sk_buff *skb, struct genl_info *info)
++{
++	struct cfg80211_registered_device *rdev = info->user_ptr[0];
++	struct net_device *dev = info->user_ptr[1];
++	struct wireless_dev *wdev = dev->ieee80211_ptr;
++	const u8 *bssid;
++
++	if (!info->attrs[NL80211_ATTR_MAC])
++		return -EINVAL;
+ 
+-	result = __nl80211_set_channel(rdev, netdev->ieee80211_ptr, info);
++	if (netif_running(dev))
++		return -EBUSY;
+ 
+- unlock:
+-	rtnl_unlock();
++	if (!rdev->ops->set_wds_peer)
++		return -EOPNOTSUPP;
+ 
+-	return result;
++	if (wdev->iftype != NL80211_IFTYPE_WDS)
++		return -EOPNOTSUPP;
++
++	bssid = nla_data(info->attrs[NL80211_ATTR_MAC]);
++	return rdev->ops->set_wds_peer(wdev->wiphy, dev, bssid);
+ }
+ 
++
+ static int nl80211_set_wiphy(struct sk_buff *skb, struct genl_info *info)
+ {
+ 	struct cfg80211_registered_device *rdev;
+ 	struct net_device *netdev = NULL;
+ 	struct wireless_dev *wdev;
+-	int result, rem_txq_params = 0;
++	int result = 0, rem_txq_params = 0;
+ 	struct nlattr *nl_txq_params;
+ 	u32 changed;
+ 	u8 retry_short = 0, retry_long = 0;
+ 	u32 frag_threshold = 0, rts_threshold = 0;
+ 	u8 coverage_class = 0;
+ 
+-	rtnl_lock();
+-
+ 	/*
+ 	 * Try to find the wiphy and netdev. Normally this
+ 	 * function shouldn't need the netdev, but this is
+@@ -4320,41 +3666,24 @@
+ static int nl80211_set_cqm_rssi(struct genl_info *info,
+ 				s32 threshold, u32 hysteresis)
+ {
+-	struct cfg80211_registered_device *rdev;
++	struct cfg80211_registered_device *rdev = info->user_ptr[0];
+ 	struct wireless_dev *wdev;
+-	struct net_device *dev;
+-	int err;
++	struct net_device *dev = info->user_ptr[1];
+ 
+ 	if (threshold > 0)
+ 		return -EINVAL;
+ 
+-	rtnl_lock();
+-
+-	err = get_rdev_dev_by_info_ifindex(info, &rdev, &dev);
+-	if (err)
+-		goto unlock_rdev;
+-
+ 	wdev = dev->ieee80211_ptr;
+ 
+-	if (!rdev->ops->set_cqm_rssi_config) {
+-		err = -EOPNOTSUPP;
+-		goto unlock_rdev;
+-	}
+-
+-	if (wdev->iftype != NL80211_IFTYPE_STATION) {
+-		err = -EOPNOTSUPP;
+-		goto unlock_rdev;
+-	}
+-
+-	err = rdev->ops->set_cqm_rssi_config(wdev->wiphy, dev,
+-					     threshold, hysteresis);
++	if (!rdev->ops->set_cqm_rssi_config)
++		return -EOPNOTSUPP;
+ 
+-unlock_rdev:
+-	cfg80211_unlock_rdev(rdev);
+-	dev_put(dev);
+-	rtnl_unlock();
++	if (wdev->iftype != NL80211_IFTYPE_STATION &&
++	    wdev->iftype != NL80211_IFTYPE_P2P_CLIENT)
++		return -EOPNOTSUPP;
+ 
+-	return err;
++	return rdev->ops->set_cqm_rssi_config(wdev->wiphy, dev,
++					      threshold, hysteresis);
+ }
+ 
+ static int nl80211_set_cqm(struct sk_buff *skb, struct genl_info *info)

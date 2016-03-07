@@ -1,0 +1,146 @@
+--- drivers/platform/x86/wmi.c
++++ drivers/platform/x86/wmi.c
+@@ -693,108 +684,71 @@
+ 
+ static void wmi_dev_free(struct device *dev)
+ {
+-	kfree(dev);
++	struct wmi_block *wmi_block = container_of(dev, struct wmi_block, dev);
++
++	kfree(wmi_block);
+ }
+ 
+ static struct class wmi_class = {
+ 	.name = "wmi",
+ 	.dev_release = wmi_dev_free,
+ 	.dev_uevent = wmi_dev_uevent,
++	.dev_attrs = wmi_dev_attrs,
+ };
+ 
+-static int wmi_create_devs(void)
++static struct wmi_block *wmi_create_device(const struct guid_block *gblock,
++					   acpi_handle handle)
+ {
+-	int result;
+-	char guid_string[37];
+-	struct guid_block *gblock;
+ 	struct wmi_block *wblock;
+-	struct list_head *p;
+-	struct device *guid_dev;
+-
+-	/* Create devices for all the GUIDs */
+-	list_for_each(p, &wmi_blocks.list) {
+-		wblock = list_entry(p, struct wmi_block, list);
+-
+-		guid_dev = kzalloc(sizeof(struct device), GFP_KERNEL);
+-		if (!guid_dev)
+-			return -ENOMEM;
+-
+-		wblock->dev = guid_dev;
+-
+-		guid_dev->class = &wmi_class;
+-		dev_set_drvdata(guid_dev, wblock);
+-
+-		gblock = &wblock->gblock;
+-
+-		wmi_gtoa(gblock->guid, guid_string);
+-		dev_set_name(guid_dev, guid_string);
+-
+-		result = device_register(guid_dev);
+-		if (result)
+-			return result;
++	int error;
++	char guid_string[37];
+ 
+-		result = device_create_file(guid_dev, &dev_attr_modalias);
+-		if (result)
+-			return result;
++	wblock = kzalloc(sizeof(struct wmi_block), GFP_KERNEL);
++	if (!wblock) {
++		error = -ENOMEM;
++		goto err_out;
+ 	}
+ 
+-	return 0;
+-}
++	wblock->handle = handle;
++	wblock->gblock = *gblock;
+ 
+-static void wmi_remove_devs(void)
+-{
+-	struct guid_block *gblock;
+-	struct wmi_block *wblock;
+-	struct list_head *p;
+-	struct device *guid_dev;
++	wblock->dev.class = &wmi_class;
+ 
+-	/* Delete devices for all the GUIDs */
+-	list_for_each(p, &wmi_blocks.list) {
+-		wblock = list_entry(p, struct wmi_block, list);
++	wmi_gtoa(gblock->guid, guid_string);
++	dev_set_name(&wblock->dev, guid_string);
+ 
+-		guid_dev = wblock->dev;
+-		gblock = &wblock->gblock;
++	dev_set_drvdata(&wblock->dev, wblock);
+ 
+-		device_remove_file(guid_dev, &dev_attr_modalias);
++	error = device_register(&wblock->dev);
++	if (error)
++		goto err_free;
+ 
+-		device_unregister(guid_dev);
+-	}
+-}
++	list_add_tail(&wblock->list, &wmi_block_list);
++	return wblock;
+ 
+-static void wmi_class_exit(void)
+-{
+-	wmi_remove_devs();
+-	class_unregister(&wmi_class);
++err_free:
++	kfree(wblock);
++err_out:
++	return ERR_PTR(error);
+ }
+ 
+-static int wmi_class_init(void)
++static void wmi_free_devices(void)
+ {
+-	int ret;
+-
+-	ret = class_register(&wmi_class);
+-	if (ret)
+-		return ret;
++	struct wmi_block *wblock, *next;
+ 
+-	ret = wmi_create_devs();
+-	if (ret)
+-		wmi_class_exit();
+-
+-	return ret;
++	/* Delete devices for all the GUIDs */
++	list_for_each_entry_safe(wblock, next, &wmi_block_list, list)
++		device_unregister(&wblock->dev);
+ }
+ 
+ static bool guid_already_parsed(const char *guid_string)
+ {
+-	struct guid_block *gblock;
+ 	struct wmi_block *wblock;
+-	struct list_head *p;
+ 
+-	list_for_each(p, &wmi_blocks.list) {
+-		wblock = list_entry(p, struct wmi_block, list);
+-		gblock = &wblock->gblock;
+-
+-		if (strncmp(gblock->guid, guid_string, 16) == 0)
++	list_for_each_entry(wblock, &wmi_block_list, list)
++		if (memcmp(wblock->gblock.guid, guid_string, 16) == 0)
+ 			return true;
+-	}
++
+ 	return false;
+ }
+ 

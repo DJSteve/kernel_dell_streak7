@@ -1,0 +1,17 @@
+--- drivers/ata/libata-sff.c
++++ drivers/ata/libata-sff.c
+@@ -1532,11 +1532,10 @@
+ 		if (!(qc->dev->flags & ATA_DFLAG_CDB_INTR))
+ 			return ata_sff_idle_irq(ap);
+ 		break;
+-	case HSM_ST:
+-	case HSM_ST_LAST:
+-		break;
+-	default:
++	case HSM_ST_IDLE:
+ 		return ata_sff_idle_irq(ap);
++	default:
++		break;
+ 	}
+ 
+ 	/* check main status, clearing INTRQ if needed */

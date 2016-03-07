@@ -1,0 +1,23 @@
+--- net/netfilter/xt_SECMARK.c
++++ net/netfilter/xt_SECMARK.c
+@@ -99,16 +98,16 @@
+ 
+ 	switch (info->mode) {
+ 	case SECMARK_MODE_SEL:
+-		err = checkentry_selinux(info);
+-		if (err <= 0)
+-			return err;
+ 		break;
+-
+ 	default:
+ 		pr_info("invalid mode: %hu\n", info->mode);
+ 		return -EINVAL;
+ 	}
+ 
++	err = checkentry_lsm(info);
++	if (err)
++		return err;
++
+ 	if (!mode)
+ 		mode = info->mode;
+ 	return 0;

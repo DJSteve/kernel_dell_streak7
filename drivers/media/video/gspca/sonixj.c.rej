@@ -1,0 +1,206 @@
+--- drivers/media/video/gspca/sonixj.c
++++ drivers/media/video/gspca/sonixj.c
+@@ -31,31 +31,42 @@
+ MODULE_DESCRIPTION("GSPCA/SONIX JPEG USB Camera Driver");
+ MODULE_LICENSE("GPL");
+ 
++/* controls */
++enum e_ctrl {
++	BRIGHTNESS,
++	CONTRAST,
++	COLORS,
++	BLUE,
++	RED,
++	GAMMA,
++	AUTOGAIN,
++	HFLIP,
++	VFLIP,
++	SHARPNESS,
++	INFRARED,
++	FREQ,
++	NCTRLS		/* number of controls */
++};
++
+ /* specific webcam descriptor */
+ struct sd {
+ 	struct gspca_dev gspca_dev;	/* !! must be the first item */
+ 
++	struct gspca_ctrl ctrls[NCTRLS];
++
+ 	atomic_t avg_lum;
+ 	u32 exposure;
+ 
+-	u16 brightness;
+-	u8 contrast;
+-	u8 colors;
+-	u8 autogain;
+-	u8 blue;
+-	u8 red;
+-	u8 gamma;
+-	u8 vflip;			/* ov7630/ov7648 only */
+-	u8 sharpness;
+-	u8 infrared;			/* mt9v111 only */
+-	u8 freq;			/* ov76xx only */
+ 	u8 quality;			/* image quality */
+ #define QUALITY_MIN 60
+ #define QUALITY_MAX 95
+ #define QUALITY_DEF 80
+ 	u8 jpegqual;			/* webcam quality */
+ 
++	u8 reg01;
++	u8 reg17;
+ 	u8 reg18;
++	u8 flags;
+ 
+ 	s8 ag_cnt;
+ #define AG_CNT_START 13
+@@ -1771,7 +1776,8 @@
+ 	struct cam *cam;
+ 
+ 	sd->bridge = id->driver_info >> 16;
+-	sd->sensor = id->driver_info;
++	sd->sensor = id->driver_info >> 8;
++	sd->flags = id->driver_info;
+ 
+ 	cam = &gspca_dev->cam;
+ 	if (sd->sensor == SENSOR_ADCM1700) {
+@@ -2485,91 +2584,67 @@
+ 
+ 	init = NULL;
+ 	mode = gspca_dev->cam.cam_mode[gspca_dev->curr_mode].priv;
+-	if (mode)
+-		reg1 = 0x46;	/* 320x240: clk 48Mhz, video trf enable */
+-	else
+-		reg1 = 0x06;	/* 640x480: clk 24Mhz, video trf enable */
+-	reg17 = 0x61;		/* 0x:20: enable sensor clock */
++	reg01 |= SYS_SEL_48M | V_TX_EN;
++	reg17 &= ~MCK_SIZE_MASK;
++	reg17 |= 0x02;			/* clock / 2 */
+ 	switch (sd->sensor) {
+ 	case SENSOR_ADCM1700:
+ 		init = adcm1700_sensor_param1;
+-		reg1 = 0x46;
+-		reg17 = 0xe2;
+ 		break;
+ 	case SENSOR_GC0307:
+ 		init = gc0307_sensor_param1;
+-		reg17 = 0xa2;
+-		reg1 = 0x44;
++		break;
++	case SENSOR_HV7131R:
++	case SENSOR_MI0360:
++		if (mode)
++			reg01 |= SYS_SEL_48M;	/* 320x240: clk 48Mhz */
++		else
++			reg01 &= ~SYS_SEL_48M;	/* 640x480: clk 24Mhz */
++		reg17 &= ~MCK_SIZE_MASK;
++		reg17 |= 0x01;			/* clock / 1 */
++		break;
++	case SENSOR_MI0360B:
++		init = mi0360b_sensor_param1;
+ 		break;
+ 	case SENSOR_MO4000:
+-		if (mode) {
+-/*			reg1 = 0x46;	 * 320 clk 48Mhz 60fp/s */
+-			reg1 = 0x06;	/* clk 24Mz */
+-		} else {
+-			reg17 = 0x22;	/* 640 MCKSIZE */
+-/*			reg1 = 0x06;	 * 640 clk 24Mz (done) */
++		if (mode) {			/* if 320x240 */
++			reg01 &= ~SYS_SEL_48M;	/* clk 24Mz */
++			reg17 &= ~MCK_SIZE_MASK;
++			reg17 |= 0x01;		/* clock / 1 */
+ 		}
+ 		break;
+ 	case SENSOR_MT9V111:
+ 		init = mt9v111_sensor_param1;
+-		if (mode) {
+-			reg1 = 0x04;	/* 320 clk 48Mhz */
+-		} else {
+-/*			reg1 = 0x06;	 * 640 clk 24Mz (done) */
+-			reg17 = 0xc2;
+-		}
+ 		break;
+ 	case SENSOR_OM6802:
+ 		init = om6802_sensor_param1;
+-		reg17 = 0x64;		/* 640 MCKSIZE */
++		if (!mode) {			/* if 640x480 */
++			reg17 &= ~MCK_SIZE_MASK;
++			reg17 |= 0x01;		/* clock / 4 */
++		}
+ 		break;
+ 	case SENSOR_OV7630:
+ 		init = ov7630_sensor_param1;
+-		reg17 = 0xe2;
+-		reg1 = 0x44;
+ 		break;
+ 	case SENSOR_OV7648:
+ 		init = ov7648_sensor_param1;
+-		reg17 = 0x21;
+-/*		reg1 = 0x42;		 * 42 - 46? */
++		reg17 &= ~MCK_SIZE_MASK;
++		reg17 |= 0x01;			/* clock / 1 */
+ 		break;
+ 	case SENSOR_OV7660:
+ 		init = ov7660_sensor_param1;
+-		if (sd->bridge == BRIDGE_SN9C120) {
+-			if (mode) {		/* 320x240 - 160x120 */
+-				reg17 = 0xa2;
+-				reg1 = 0x44;	/* 48 Mhz, video trf eneble */
+-			}
+-		} else {
+-			reg17 = 0x22;
+-			reg1 = 0x06;	/* 24 Mhz, video trf eneble
+-					 * inverse power down */
+-		}
+ 		break;
+ 	case SENSOR_PO1030:
+ 		init = po1030_sensor_param1;
+-		reg17 = 0xa2;
+-		reg1 = 0x44;
+ 		break;
+ 	case SENSOR_PO2030N:
+ 		init = po2030n_sensor_param1;
+-		reg1 = 0x46;
+-		reg17 = 0xa2;
+ 		break;
+ 	case SENSOR_SOI768:
+ 		init = soi768_sensor_param1;
+-		reg1 = 0x44;
+-		reg17 = 0xa2;
+ 		break;
+-	default:
+-/*	case SENSOR_SP80708: */
++	case SENSOR_SP80708:
+ 		init = sp80708_sensor_param1;
+-		if (mode) {
+-/*??			reg1 = 0x04;	 * 320 clk 48Mhz */
+-		} else {
+-			reg1 = 0x46;	 /* 640 clk 48Mz */
+-			reg17 = 0xa2;
+-		}
+ 		break;
+ 	}
+ 
+@@ -2914,14 +2831,18 @@
+ /* -- module initialisation -- */
+ #define BS(bridge, sensor) \
+ 	.driver_info = (BRIDGE_ ## bridge << 16) \
+-			| SENSOR_ ## sensor
++			| (SENSOR_ ## sensor << 8)
++#define BSF(bridge, sensor, flags) \
++	.driver_info = (BRIDGE_ ## bridge << 16) \
++			| (SENSOR_ ## sensor << 8) \
++			| (flags)
+ static const __devinitdata struct usb_device_id device_table[] = {
+ #if !defined CONFIG_USB_SN9C102 && !defined CONFIG_USB_SN9C102_MODULE
+ 	{USB_DEVICE(0x0458, 0x7025), BS(SN9C120, MI0360)},
+ 	{USB_DEVICE(0x0458, 0x702e), BS(SN9C120, OV7660)},
+ #endif
+-	{USB_DEVICE(0x045e, 0x00f5), BS(SN9C105, OV7660)},
+-	{USB_DEVICE(0x045e, 0x00f7), BS(SN9C105, OV7660)},
++	{USB_DEVICE(0x045e, 0x00f5), BSF(SN9C105, OV7660, PDN_INV)},
++	{USB_DEVICE(0x045e, 0x00f7), BSF(SN9C105, OV7660, PDN_INV)},
+ 	{USB_DEVICE(0x0471, 0x0327), BS(SN9C105, MI0360)},
+ 	{USB_DEVICE(0x0471, 0x0328), BS(SN9C105, MI0360)},
+ 	{USB_DEVICE(0x0471, 0x0330), BS(SN9C105, MI0360)},

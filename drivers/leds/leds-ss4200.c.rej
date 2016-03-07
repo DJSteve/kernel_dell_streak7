@@ -1,0 +1,10 @@
+--- drivers/leds/leds-ss4200.c
++++ drivers/leds/leds-ss4200.c
+@@ -102,6 +102,7 @@
+ 			DMI_MATCH(DMI_PRODUCT_VERSION, "1.00.00")
+ 		}
+ 	},
++	{}
+ };
+ 
+ /*

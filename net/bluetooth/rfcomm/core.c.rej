@@ -1,0 +1,11 @@
+--- net/bluetooth/rfcomm/core.c
++++ net/bluetooth/rfcomm/core.c
+@@ -257,7 +259,7 @@
+ 	BT_DBG("session %p state %ld", s, s->state);
+ 
+ 	set_bit(RFCOMM_TIMED_OUT, &s->flags);
+-	rfcomm_schedule(RFCOMM_SCHED_TIMEO);
++	rfcomm_schedule();
+ }
+ 
+ static void rfcomm_session_set_timer(struct rfcomm_session *s, long timeout)

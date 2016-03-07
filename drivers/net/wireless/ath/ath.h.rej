@@ -1,0 +1,18 @@
+--- drivers/net/wireless/ath/ath.h
++++ drivers/net/wireless/ath/ath.h
+@@ -150,7 +181,14 @@
+ 
+ 	u32 keymax;
+ 	DECLARE_BITMAP(keymap, ATH_KEYMAX);
+-	u8 splitmic;
++	DECLARE_BITMAP(tkip_keymap, ATH_KEYMAX);
++	enum ath_crypt_caps crypt_caps;
++
++	unsigned int clockrate;
++
++	spinlock_t cc_lock;
++	struct ath_cycle_counters cc_ani;
++	struct ath_cycle_counters cc_survey;
+ 
+ 	struct ath_regulatory regulatory;
+ 	const struct ath_ops *ops;

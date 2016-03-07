@@ -1,0 +1,14 @@
+--- drivers/net/wireless/rt2x00/rt2x00.h
++++ drivers/net/wireless/rt2x00/rt2x00.h
+@@ -214,8 +216,9 @@
+ 	unsigned int flags;
+ #define GEOGRAPHY_ALLOWED	0x00000001
+ 
+-	short tx_power1;
+-	short tx_power2;
++	short max_power;
++	short default_power1;
++	short default_power2;
+ };
+ 
+ /*

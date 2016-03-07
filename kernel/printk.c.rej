@@ -1,0 +1,32 @@
+--- kernel/printk.c
++++ kernel/printk.c
+@@ -261,6 +261,12 @@
+ }
+ #endif
+ 
++#ifdef CONFIG_SECURITY_DMESG_RESTRICT
++int dmesg_restrict = 1;
++#else
++int dmesg_restrict;
++#endif
++
+ int do_syslog(int type, char __user *buf, int len, bool from_file)
+ {
+ 	unsigned i, j, limit, count;
+@@ -1076,13 +1096,15 @@
+ 
+ int printk_needs_cpu(int cpu)
+ {
++	if (unlikely(cpu_is_offline(cpu)))
++		printk_tick();
+ 	return per_cpu(printk_pending, cpu);
+ }
+ 
+ void wake_up_klogd(void)
+ {
+ 	if (waitqueue_active(&log_wait))
+-		__raw_get_cpu_var(printk_pending) = 1;
++		this_cpu_write(printk_pending, 1);
+ }
+ 
+ /**

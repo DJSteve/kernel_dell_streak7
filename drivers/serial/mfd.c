@@ -172,6 +172,9 @@ static ssize_t port_show_regs(struct file *file, char __user *user_buf,
 	len += snprintf(buf + len, HSU_REGS_BUFSIZE - len,
 			"DIV: \t\t0x%08x\n", serial_in(up, UART_DIV));
 
+	if (len > HSU_REGS_BUFSIZE)
+		len = HSU_REGS_BUFSIZE;
+
 	ret =  simple_read_from_buffer(user_buf, count, ppos, buf, len);
 	kfree(buf);
 	return ret;
@@ -219,6 +222,9 @@ static ssize_t dma_show_regs(struct file *file, char __user *user_buf,
 	len += snprintf(buf + len, HSU_REGS_BUFSIZE - len,
 			"D0TSR: \t\t0x%08x\n", chan_readl(chan, HSU_CH_D3TSR));
 
+	if (len > HSU_REGS_BUFSIZE)
+		len = HSU_REGS_BUFSIZE;
+
 	ret =  simple_read_from_buffer(user_buf, count, ppos, buf, len);
 	kfree(buf);
 	return ret;
@@ -228,12 +234,14 @@ static const struct file_operations port_regs_ops = {
 	.owner		= THIS_MODULE,
 	.open		= hsu_show_regs_open,
 	.read		= port_show_regs,
+	.llseek		= default_llseek,
 };
 
 static const struct file_operations dma_regs_ops = {
 	.owner		= THIS_MODULE,
 	.open		= hsu_show_regs_open,
 	.read		= dma_show_regs,
+	.llseek		= default_llseek,
 };
 
 static int hsu_debugfs_init(struct hsu_port *hsu)

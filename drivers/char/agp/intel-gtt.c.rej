@@ -1,0 +1,502 @@
+--- drivers/char/agp/intel-gtt.c
++++ drivers/char/agp/intel-gtt.c
+@@ -478,102 +433,49 @@
+ 	{512, 131072, 7},
+ };
+ 
+-static void intel_i830_init_gtt_entries(void)
++static unsigned int intel_gtt_stolen_entries(void)
+ {
+ 	u16 gmch_ctrl;
+-	int gtt_entries = 0;
+ 	u8 rdct;
+ 	int local = 0;
+ 	static const int ddt[4] = { 0, 16, 32, 64 };
+-	int size; /* reserved space (in kb) at the top of stolen memory */
++	unsigned int overhead_entries, stolen_entries;
++	unsigned int stolen_size = 0;
+ 
+-	pci_read_config_word(agp_bridge->dev, I830_GMCH_CTRL, &gmch_ctrl);
++	pci_read_config_word(intel_private.bridge_dev,
++			     I830_GMCH_CTRL, &gmch_ctrl);
+ 
+-	if (IS_I965) {
+-		u32 pgetbl_ctl;
+-		pgetbl_ctl = readl(intel_private.registers+I810_PGETBL_CTL);
++	if (INTEL_GTT_GEN > 4 || IS_PINEVIEW)
++		overhead_entries = 0;
++	else
++		overhead_entries = intel_private.base.gtt_mappable_entries
++			/ 1024;
+ 
+-		/* The 965 has a field telling us the size of the GTT,
+-		 * which may be larger than what is necessary to map the
+-		 * aperture.
+-		 */
+-		switch (pgetbl_ctl & I965_PGETBL_SIZE_MASK) {
+-		case I965_PGETBL_SIZE_128KB:
+-			size = 128;
+-			break;
+-		case I965_PGETBL_SIZE_256KB:
+-			size = 256;
+-			break;
+-		case I965_PGETBL_SIZE_512KB:
+-			size = 512;
+-			break;
+-		case I965_PGETBL_SIZE_1MB:
+-			size = 1024;
+-			break;
+-		case I965_PGETBL_SIZE_2MB:
+-			size = 2048;
+-			break;
+-		case I965_PGETBL_SIZE_1_5MB:
+-			size = 1024 + 512;
+-			break;
+-		default:
+-			dev_info(&intel_private.pcidev->dev,
+-				 "unknown page table size, assuming 512KB\n");
+-			size = 512;
+-		}
+-		size += 4; /* add in BIOS popup space */
+-	} else if (IS_G33 && !IS_PINEVIEW) {
+-	/* G33's GTT size defined in gmch_ctrl */
+-		switch (gmch_ctrl & G33_PGETBL_SIZE_MASK) {
+-		case G33_PGETBL_SIZE_1M:
+-			size = 1024;
+-			break;
+-		case G33_PGETBL_SIZE_2M:
+-			size = 2048;
+-			break;
+-		default:
+-			dev_info(&agp_bridge->dev->dev,
+-				 "unknown page table size 0x%x, assuming 512KB\n",
+-				(gmch_ctrl & G33_PGETBL_SIZE_MASK));
+-			size = 512;
+-		}
+-		size += 4;
+-	} else if (IS_G4X || IS_PINEVIEW) {
+-		/* On 4 series hardware, GTT stolen is separate from graphics
+-		 * stolen, ignore it in stolen gtt entries counting.  However,
+-		 * 4KB of the stolen memory doesn't get mapped to the GTT.
+-		 */
+-		size = 4;
+-	} else {
+-		/* On previous hardware, the GTT size was just what was
+-		 * required to map the aperture.
+-		 */
+-		size = agp_bridge->driver->fetch_size() + 4;
+-	}
++	overhead_entries += 1; /* BIOS popup */
+ 
+-	if (agp_bridge->dev->device == PCI_DEVICE_ID_INTEL_82830_HB ||
+-	    agp_bridge->dev->device == PCI_DEVICE_ID_INTEL_82845G_HB) {
++	if (intel_private.bridge_dev->device == PCI_DEVICE_ID_INTEL_82830_HB ||
++	    intel_private.bridge_dev->device == PCI_DEVICE_ID_INTEL_82845G_HB) {
+ 		switch (gmch_ctrl & I830_GMCH_GMS_MASK) {
+ 		case I830_GMCH_GMS_STOLEN_512:
+-			gtt_entries = KB(512) - KB(size);
++			stolen_size = KB(512);
+ 			break;
+ 		case I830_GMCH_GMS_STOLEN_1024:
+-			gtt_entries = MB(1) - KB(size);
++			stolen_size = MB(1);
+ 			break;
+ 		case I830_GMCH_GMS_STOLEN_8192:
+-			gtt_entries = MB(8) - KB(size);
++			stolen_size = MB(8);
+ 			break;
+ 		case I830_GMCH_GMS_LOCAL:
+ 			rdct = readb(intel_private.registers+I830_RDRAM_CHANNEL_TYPE);
+-			gtt_entries = (I830_RDRAM_ND(rdct) + 1) *
++			stolen_size = (I830_RDRAM_ND(rdct) + 1) *
+ 					MB(ddt[I830_RDRAM_DDT(rdct)]);
+ 			local = 1;
+ 			break;
+ 		default:
+-			gtt_entries = 0;
++			stolen_size = 0;
+ 			break;
+ 		}
+-	} else if (IS_SNB) {
++	} else if (INTEL_GTT_GEN == 6) {
+ 		/*
+ 		 * SandyBridge has new memory control reg at 0x50.w
+ 		 */
+@@ -1237,320 +1275,100 @@
+ 		release_resource(&intel_private.ifp_resource);
+ 	intel_private.ifp_resource.start = 0;
+ 	intel_private.resource_valid = 0;
+-	iounmap(intel_private.gtt);
+-	iounmap(intel_private.registers);
+ }
+ 
+-static void intel_i915_chipset_flush(struct agp_bridge_data *bridge)
++static void i9xx_chipset_flush(void)
+ {
+ 	if (intel_private.i9xx_flush_page)
+ 		writel(1, intel_private.i9xx_flush_page);
+ }
+ 
+-static int intel_i915_insert_entries(struct agp_memory *mem, off_t pg_start,
+-				     int type)
++static void i965_write_entry(dma_addr_t addr,
++			     unsigned int entry,
++			     unsigned int flags)
+ {
+-	int num_entries;
+-	void *temp;
+-	int ret = -EINVAL;
+-	int mask_type;
+-
+-	if (mem->page_count == 0)
+-		goto out;
+-
+-	temp = agp_bridge->current_size;
+-	num_entries = A_SIZE_FIX(temp)->num_entries;
+-
+-	if (pg_start < intel_private.gtt_entries) {
+-		dev_printk(KERN_DEBUG, &intel_private.pcidev->dev,
+-			   "pg_start == 0x%.8lx, intel_private.gtt_entries == 0x%.8x\n",
+-			   pg_start, intel_private.gtt_entries);
++	u32 pte_flags;
+ 
+-		dev_info(&intel_private.pcidev->dev,
+-			 "trying to insert into local/stolen memory\n");
+-		goto out_err;
+-	}
+-
+-	if ((pg_start + mem->page_count) > num_entries)
+-		goto out_err;
+-
+-	/* The i915 can't check the GTT for entries since it's read only;
+-	 * depend on the caller to make the correct offset decisions.
+-	 */
+-
+-	if (type != mem->type)
+-		goto out_err;
++	pte_flags = I810_PTE_VALID;
++	if (flags == AGP_USER_CACHED_MEMORY)
++		pte_flags |= I830_PTE_SYSTEM_CACHED;
+ 
+-	mask_type = agp_bridge->driver->agp_type_to_mask_type(agp_bridge, type);
+-
+-	if (!IS_SNB && mask_type != 0 && mask_type != AGP_PHYS_MEMORY &&
+-	    mask_type != INTEL_AGP_CACHED_MEMORY)
+-		goto out_err;
+-
+-	if (!mem->is_flushed)
+-		global_cache_flush();
+-
+-	intel_agp_insert_sg_entries(mem, pg_start, mask_type);
+-
+- out:
+-	ret = 0;
+- out_err:
+-	mem->is_flushed = true;
+-	return ret;
++	/* Shift high bits down */
++	addr |= (addr >> 28) & 0xf0;
++	writel(addr | pte_flags, intel_private.gtt + entry);
+ }
+ 
+-static int intel_i915_remove_entries(struct agp_memory *mem, off_t pg_start,
+-				     int type)
++static bool gen6_check_flags(unsigned int flags)
+ {
+-	int i;
+-
+-	if (mem->page_count == 0)
+-		return 0;
+-
+-	if (pg_start < intel_private.gtt_entries) {
+-		dev_info(&intel_private.pcidev->dev,
+-			 "trying to disable local/stolen memory\n");
+-		return -EINVAL;
+-	}
+-
+-	for (i = pg_start; i < (mem->page_count + pg_start); i++)
+-		writel(agp_bridge->scratch_page, intel_private.gtt+i);
+-
+-	readl(intel_private.gtt+i-1);
+-
+-	return 0;
++	return true;
+ }
+ 
+-/* Return the aperture size by just checking the resource length.  The effect
+- * described in the spec of the MSAC registers is just changing of the
+- * resource size.
+- */
+-static int intel_i9xx_fetch_size(void)
++static void gen6_write_entry(dma_addr_t addr, unsigned int entry,
++			     unsigned int flags)
+ {
+-	int num_sizes = ARRAY_SIZE(intel_i830_sizes);
+-	int aper_size; /* size in megabytes */
+-	int i;
+-
+-	aper_size = pci_resource_len(intel_private.pcidev, 2) / MB(1);
+-
+-	for (i = 0; i < num_sizes; i++) {
+-		if (aper_size == intel_i830_sizes[i].size) {
+-			agp_bridge->current_size = intel_i830_sizes + i;
+-			return aper_size;
+-		}
++	unsigned int type_mask = flags & ~AGP_USER_CACHED_MEMORY_GFDT;
++	unsigned int gfdt = flags & AGP_USER_CACHED_MEMORY_GFDT;
++	u32 pte_flags;
++
++	if (type_mask == AGP_USER_MEMORY)
++		pte_flags = GEN6_PTE_UNCACHED | I810_PTE_VALID;
++	else if (type_mask == AGP_USER_CACHED_MEMORY_LLC_MLC) {
++		pte_flags = GEN6_PTE_LLC_MLC | I810_PTE_VALID;
++		if (gfdt)
++			pte_flags |= GEN6_PTE_GFDT;
++	} else { /* set 'normal'/'cached' to LLC by default */
++		pte_flags = GEN6_PTE_LLC | I810_PTE_VALID;
++		if (gfdt)
++			pte_flags |= GEN6_PTE_GFDT;
+ 	}
+ 
+-	return 0;
++	/* gen6 has bit11-4 for physical addr bit39-32 */
++	addr |= (addr >> 28) & 0xff0;
++	writel(addr | pte_flags, intel_private.gtt + entry);
+ }
+ 
+-static int intel_i915_get_gtt_size(void)
++static void gen6_cleanup(void)
+ {
+-	int size;
+-
+-	if (IS_G33) {
+-		u16 gmch_ctrl;
+-
+-		/* G33's GTT size defined in gmch_ctrl */
+-		pci_read_config_word(agp_bridge->dev, I830_GMCH_CTRL, &gmch_ctrl);
+-		switch (gmch_ctrl & I830_GMCH_GMS_MASK) {
+-		case I830_GMCH_GMS_STOLEN_512:
+-			size = 512;
+-			break;
+-		case I830_GMCH_GMS_STOLEN_1024:
+-			size = 1024;
+-			break;
+-		case I830_GMCH_GMS_STOLEN_8192:
+-			size = 8*1024;
+-			break;
+-		default:
+-			dev_info(&agp_bridge->dev->dev,
+-				 "unknown page table size 0x%x, assuming 512KB\n",
+-				(gmch_ctrl & I830_GMCH_GMS_MASK));
+-			size = 512;
+-		}
+-	} else {
+-		/* On previous hardware, the GTT size was just what was
+-		 * required to map the aperture.
+-		 */
+-		size = agp_bridge->driver->fetch_size();
+-	}
+-
+-	return KB(size);
+ }
+ 
+-/* The intel i915 automatically initializes the agp aperture during POST.
+- * Use the memory already set aside for in the GTT.
+- */
+-static int intel_i915_create_gatt_table(struct agp_bridge_data *bridge)
++static int i9xx_setup(void)
+ {
+-	int page_order;
+-	struct aper_size_info_fixed *size;
+-	int num_entries;
+-	u32 temp, temp2;
+-	int gtt_map_size;
+-
+-	size = agp_bridge->current_size;
+-	page_order = size->page_order;
+-	num_entries = size->num_entries;
+-	agp_bridge->gatt_table_real = NULL;
+-
+-	pci_read_config_dword(intel_private.pcidev, I915_MMADDR, &temp);
+-	pci_read_config_dword(intel_private.pcidev, I915_PTEADDR, &temp2);
+-
+-	gtt_map_size = intel_i915_get_gtt_size();
++	u32 reg_addr;
+ 
+-	intel_private.gtt = ioremap(temp2, gtt_map_size);
+-	if (!intel_private.gtt)
+-		return -ENOMEM;
+-
+-	intel_private.gtt_total_size = gtt_map_size / 4;
+-
+-	temp &= 0xfff80000;
+-
+-	intel_private.registers = ioremap(temp, 128 * 4096);
+-	if (!intel_private.registers) {
+-		iounmap(intel_private.gtt);
+-		return -ENOMEM;
+-	}
++	pci_read_config_dword(intel_private.pcidev, I915_MMADDR, &reg_addr);
+ 
+-	temp = readl(intel_private.registers+I810_PGETBL_CTL) & 0xfffff000;
+-	global_cache_flush();	/* FIXME: ? */
++	reg_addr &= 0xfff80000;
+ 
+-	/* we have to call this as early as possible after the MMIO base address is known */
+-	intel_i830_init_gtt_entries();
+-	if (intel_private.gtt_entries == 0) {
+-		iounmap(intel_private.gtt);
+-		iounmap(intel_private.registers);
++	intel_private.registers = ioremap(reg_addr, 128 * 4096);
++	if (!intel_private.registers)
+ 		return -ENOMEM;
+-	}
+ 
+-	agp_bridge->gatt_table = NULL;
+-
+-	agp_bridge->gatt_bus_addr = temp;
++	if (INTEL_GTT_GEN == 3) {
++		u32 gtt_addr;
+ 
+-	return 0;
+-}
+-
+-/*
+- * The i965 supports 36-bit physical addresses, but to keep
+- * the format of the GTT the same, the bits that don't fit
+- * in a 32-bit word are shifted down to bits 4..7.
+- *
+- * Gcc is smart enough to notice that "(addr >> 28) & 0xf0"
+- * is always zero on 32-bit architectures, so no need to make
+- * this conditional.
+- */
+-static unsigned long intel_i965_mask_memory(struct agp_bridge_data *bridge,
+-					    dma_addr_t addr, int type)
+-{
+-	/* Shift high bits down */
+-	addr |= (addr >> 28) & 0xf0;
+-
+-	/* Type checking must be done elsewhere */
+-	return addr | bridge->driver->masks[type].mask;
+-}
+-
+-static unsigned long intel_gen6_mask_memory(struct agp_bridge_data *bridge,
+-					    dma_addr_t addr, int type)
+-{
+-	/* gen6 has bit11-4 for physical addr bit39-32 */
+-	addr |= (addr >> 28) & 0xff0;
+-
+-	/* Type checking must be done elsewhere */
+-	return addr | bridge->driver->masks[type].mask;
+-}
+-
+-static void intel_i965_get_gtt_range(int *gtt_offset, int *gtt_size)
+-{
+-	u16 snb_gmch_ctl;
+-
+-	switch (agp_bridge->dev->device) {
+-	case PCI_DEVICE_ID_INTEL_GM45_HB:
+-	case PCI_DEVICE_ID_INTEL_EAGLELAKE_HB:
+-	case PCI_DEVICE_ID_INTEL_Q45_HB:
+-	case PCI_DEVICE_ID_INTEL_G45_HB:
+-	case PCI_DEVICE_ID_INTEL_G41_HB:
+-	case PCI_DEVICE_ID_INTEL_B43_HB:
+-	case PCI_DEVICE_ID_INTEL_IRONLAKE_D_HB:
+-	case PCI_DEVICE_ID_INTEL_IRONLAKE_M_HB:
+-	case PCI_DEVICE_ID_INTEL_IRONLAKE_MA_HB:
+-	case PCI_DEVICE_ID_INTEL_IRONLAKE_MC2_HB:
+-		*gtt_offset = *gtt_size = MB(2);
+-		break;
+-	case PCI_DEVICE_ID_INTEL_SANDYBRIDGE_HB:
+-	case PCI_DEVICE_ID_INTEL_SANDYBRIDGE_M_HB:
+-	case PCI_DEVICE_ID_INTEL_SANDYBRIDGE_S_HB:
+-		*gtt_offset = MB(2);
++		pci_read_config_dword(intel_private.pcidev,
++				      I915_PTEADDR, &gtt_addr);
++		intel_private.gtt_bus_addr = gtt_addr;
++	} else {
++		u32 gtt_offset;
+ 
+-		pci_read_config_word(intel_private.pcidev, SNB_GMCH_CTRL, &snb_gmch_ctl);
+-		switch (snb_gmch_ctl & SNB_GTT_SIZE_MASK) {
+-		default:
+-		case SNB_GTT_SIZE_0M:
+-			printk(KERN_ERR "Bad GTT size mask: 0x%04x.\n", snb_gmch_ctl);
+-			*gtt_size = MB(0);
+-			break;
+-		case SNB_GTT_SIZE_1M:
+-			*gtt_size = MB(1);
++		switch (INTEL_GTT_GEN) {
++		case 5:
++		case 6:
++			gtt_offset = MB(2);
+ 			break;
+-		case SNB_GTT_SIZE_2M:
+-			*gtt_size = MB(2);
++		case 4:
++		default:
++			gtt_offset =  KB(512);
+ 			break;
+ 		}
+-		break;
+-	default:
+-		*gtt_offset = *gtt_size = KB(512);
+-	}
+-}
+-
+-/* The intel i965 automatically initializes the agp aperture during POST.
+- * Use the memory already set aside for in the GTT.
+- */
+-static int intel_i965_create_gatt_table(struct agp_bridge_data *bridge)
+-{
+-	int page_order;
+-	struct aper_size_info_fixed *size;
+-	int num_entries;
+-	u32 temp;
+-	int gtt_offset, gtt_size;
+-
+-	size = agp_bridge->current_size;
+-	page_order = size->page_order;
+-	num_entries = size->num_entries;
+-	agp_bridge->gatt_table_real = NULL;
+-
+-	pci_read_config_dword(intel_private.pcidev, I915_MMADDR, &temp);
+-
+-	temp &= 0xfff00000;
+-
+-	intel_i965_get_gtt_range(&gtt_offset, &gtt_size);
+-
+-	intel_private.gtt = ioremap((temp + gtt_offset) , gtt_size);
+-
+-	if (!intel_private.gtt)
+-		return -ENOMEM;
+-
+-	intel_private.gtt_total_size = gtt_size / 4;
+-
+-	intel_private.registers = ioremap(temp, 128 * 4096);
+-	if (!intel_private.registers) {
+-		iounmap(intel_private.gtt);
+-		return -ENOMEM;
+-	}
+-
+-	temp = readl(intel_private.registers+I810_PGETBL_CTL) & 0xfffff000;
+-	global_cache_flush();   /* FIXME: ? */
+-
+-	/* we have to call this as early as possible after the MMIO base address is known */
+-	intel_i830_init_gtt_entries();
+-	if (intel_private.gtt_entries == 0) {
+-		iounmap(intel_private.gtt);
+-		iounmap(intel_private.registers);
+-		return -ENOMEM;
++		intel_private.gtt_bus_addr = reg_addr + gtt_offset;
+ 	}
+ 
+-	agp_bridge->gatt_table = NULL;
++	intel_private.pte_bus_addr =
++		readl(intel_private.registers+I810_PGETBL_CTL) & 0xfffff000;
+ 
+-	agp_bridge->gatt_bus_addr = temp;
++	intel_i9xx_setup_flush();
+ 
+ 	return 0;
+ }

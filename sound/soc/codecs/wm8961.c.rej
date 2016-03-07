@@ -1,0 +1,20 @@
+--- sound/soc/codecs/wm8961.c
++++ sound/soc/codecs/wm8961.c
+@@ -711,7 +711,7 @@
+ 	if (fs <= 24000)
+ 		reg |= WM8961_DACSLOPE;
+ 	else
+-		reg &= WM8961_DACSLOPE;
++		reg &= ~WM8961_DACSLOPE;
+ 	snd_soc_write(codec, WM8961_ADC_DAC_CONTROL_2, reg);
+ 
+ 	return 0;
+@@ -736,7 +736,7 @@
+ 		freq /= 2;
+ 	} else {
+ 		dev_dbg(codec->dev, "Using MCLK/1 for %dHz MCLK\n", freq);
+-		reg &= WM8961_MCLKDIV;
++		reg &= ~WM8961_MCLKDIV;
+ 	}
+ 
+ 	snd_soc_write(codec, WM8961_CLOCKING1, reg);

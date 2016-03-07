@@ -1,0 +1,103 @@
+--- arch/x86/oprofile/op_model_amd.c
++++ arch/x86/oprofile/op_model_amd.c
+@@ -573,39 +680,86 @@
+ 			break;
+ 		++nodes;
+ 		pci_write_config_dword(cpu_cfg, IBSCTL, ibs_eilvt_off
+-				       | IBSCTL_LVTOFFSETVAL);
++				       | IBSCTL_LVT_OFFSET_VALID);
+ 		pci_read_config_dword(cpu_cfg, IBSCTL, &value);
+-		if (value != (ibs_eilvt_off | IBSCTL_LVTOFFSETVAL)) {
++		if (value != (ibs_eilvt_off | IBSCTL_LVT_OFFSET_VALID)) {
+ 			pci_dev_put(cpu_cfg);
+ 			printk(KERN_DEBUG "Failed to setup IBS LVT offset, "
+-				"IBSCTL = 0x%08x", value);
+-			return 1;
++			       "IBSCTL = 0x%08x\n", value);
++			return -EINVAL;
+ 		}
+ 	} while (1);
+ 
+ 	if (!nodes) {
+-		printk(KERN_DEBUG "No CPU node configured for IBS");
+-		return 1;
++		printk(KERN_DEBUG "No CPU node configured for IBS\n");
++		return -ENODEV;
+ 	}
+ 
+ 	return 0;
+ }
+ 
+-/* initialize the APIC for the IBS interrupts if available */
++static int force_ibs_eilvt_setup(void)
++{
++	int i;
++	int ret;
++
++	/* find the next free available EILVT entry */
++	for (i = 1; i < 4; i++) {
++		if (!eilvt_is_available(i))
++			continue;
++		ret = setup_ibs_ctl(i);
++		if (ret)
++			return ret;
++		return 0;
++	}
++
++	printk(KERN_DEBUG "No EILVT entry available\n");
++
++	return -EBUSY;
++}
++
++static int __init_ibs_nmi(void)
++{
++	int ret;
++
++	if (ibs_eilvt_valid())
++		return 0;
++
++	ret = force_ibs_eilvt_setup();
++	if (ret)
++		return ret;
++
++	if (!ibs_eilvt_valid())
++		return -EFAULT;
++
++	pr_err(FW_BUG "workaround enabled for IBS LVT offset\n");
++
++	return 0;
++}
++
++/*
++ * check and reserve APIC extended interrupt LVT offset for IBS if
++ * available
++ *
++ * init_ibs() preforms implicitly cpu-local operations, so pin this
++ * thread to its current CPU
++ */
++
+ static void init_ibs(void)
+ {
+-	ibs_caps = get_ibs_caps();
++	preempt_disable();
+ 
++	ibs_caps = get_ibs_caps();
+ 	if (!ibs_caps)
+-		return;
++		goto out;
+ 
+-	if (__init_ibs_nmi()) {
++	if (__init_ibs_nmi() < 0)
+ 		ibs_caps = 0;
+-		return;
+-	}
++	else
++		printk(KERN_INFO "oprofile: AMD IBS detected (0x%08x)\n", ibs_caps);
+ 
+-	printk(KERN_INFO "oprofile: AMD IBS detected (0x%08x)\n",
+-	       (unsigned)ibs_caps);
++out:
++	preempt_enable();
+ }
+ 
+ static int (*create_arch_files)(struct super_block *sb, struct dentry *root);

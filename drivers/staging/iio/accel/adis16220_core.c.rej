@@ -1,0 +1,27 @@
+--- drivers/staging/iio/accel/adis16220_core.c
++++ drivers/staging/iio/accel/adis16220_core.c
+@@ -495,18 +495,19 @@
+ 		adis16220_read_16bit,
+ 		adis16220_write_16bit,
+ 		ADIS16220_ACCL_NULL);
++static IIO_CONST_ATTR_ACCEL_SCALE("0.18704223545");
+ static IIO_DEV_ATTR_TEMP_RAW(adis16220_read_12bit_unsigned);
+-static IIO_CONST_ATTR(temp_offset, "25");
+-static IIO_CONST_ATTR(temp_scale, "-0.47");
++static IIO_CONST_ATTR_TEMP_OFFSET("25");
++static IIO_CONST_ATTR_TEMP_SCALE("-0.47");
+ 
+-static IIO_DEV_ATTR_IN_RAW(0, adis16220_read_16bit, ADIS16220_CAPT_BUF1);
+-static IIO_DEV_ATTR_IN_RAW(1, adis16220_read_16bit, ADIS16220_CAPT_BUF2);
++static IIO_DEV_ATTR_IN_RAW(1, adis16220_read_16bit, ADIS16220_CAPT_BUF1);
++static IIO_DEV_ATTR_IN_RAW(2, adis16220_read_16bit, ADIS16220_CAPT_BUF2);
+ 
+ static IIO_DEVICE_ATTR(reset, S_IWUSR, NULL,
+ 		adis16220_write_reset, 0);
+ 
+ #define IIO_DEV_ATTR_CAPTURE(_store)				\
+-	IIO_DEVICE_ATTR(capture, S_IWUGO, NULL, _store, 0)
++	IIO_DEVICE_ATTR(capture, S_IWUSR, NULL, _store, 0)
+ 
+ static IIO_DEV_ATTR_CAPTURE(adis16220_write_capture);
+ 

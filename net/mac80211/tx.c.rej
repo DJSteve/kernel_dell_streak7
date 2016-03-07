@@ -1,0 +1,26 @@
+--- net/mac80211/tx.c
++++ net/mac80211/tx.c
+@@ -1731,21 +1763,19 @@
+ 	u16 ethertype, hdrlen,  meshhdrlen = 0;
+ 	__le16 fc;
+ 	struct ieee80211_hdr hdr;
+-	struct ieee80211s_hdr mesh_hdr;
++	struct ieee80211s_hdr mesh_hdr __maybe_unused;
+ 	const u8 *encaps_data;
+ 	int encaps_len, skip_header_bytes;
+ 	int nh_pos, h_pos;
+ 	struct sta_info *sta = NULL;
+ 	u32 sta_flags = 0;
++	struct sk_buff *tmp_skb;
+ 
+ 	if (unlikely(skb->len < ETH_HLEN)) {
+ 		ret = NETDEV_TX_OK;
+ 		goto fail;
+ 	}
+ 
+-	nh_pos = skb_network_header(skb) - skb->data;
+-	h_pos = skb_transport_header(skb) - skb->data;
+-
+ 	/* convert Ethernet header to proper 802.11 header (based on
+ 	 * operation mode) */
+ 	ethertype = (skb->data[12] << 8) | skb->data[13];

@@ -1,0 +1,11 @@
+--- drivers/net/benet/be_cmds.c
++++ drivers/net/benet/be_cmds.c
+@@ -1247,7 +1315,7 @@
+ 
+ 		i = 0;
+ 		netdev_for_each_mc_addr(ha, netdev)
+-			memcpy(req->mac[i].byte, ha->addr, ETH_ALEN);
++			memcpy(req->mac[i++].byte, ha->addr, ETH_ALEN);
+ 	} else {
+ 		req->promiscuous = 1;
+ 	}

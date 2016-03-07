@@ -1,0 +1,20 @@
+--- drivers/net/pppoe.c
++++ drivers/net/pppoe.c
+@@ -948,7 +948,7 @@
+ 
+ abort:
+ 	kfree_skb(skb);
+-	return 0;
++	return 1;
+ }
+ 
+ /************************************************************************
+@@ -1124,7 +1124,7 @@
+ 	.ioctl		= pppox_ioctl,
+ };
+ 
+-static struct pppox_proto pppoe_proto = {
++static const struct pppox_proto pppoe_proto = {
+ 	.create	= pppoe_create,
+ 	.ioctl	= pppoe_ioctl,
+ 	.owner	= THIS_MODULE,

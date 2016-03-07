@@ -1,0 +1,16 @@
+--- drivers/net/bonding/bonding.h
++++ drivers/net/bonding/bonding.h
+@@ -269,11 +298,11 @@
+ 
+ 	bond_for_each_slave(bond, slave, i) {
+ 		if (slave->dev == slave_dev) {
+-			break;
++			return slave;
+ 		}
+ 	}
+ 
+-	return slave;
++	return 0;
+ }
+ 
+ static inline struct bonding *bond_get_bond_by_slave(struct slave *slave)

@@ -1,5 +1,6 @@
 #include <linux/pagemap.h>
 #include <linux/blkdev.h>
+#include <linux/genhd.h>
 
 #define PART_NAME_SIZE 128
 

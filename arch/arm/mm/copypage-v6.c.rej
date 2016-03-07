@@ -1,0 +1,11 @@
+--- arch/arm/mm/copypage-v6.c
++++ arch/arm/mm/copypage-v6.c
+@@ -79,7 +79,7 @@
+ 	unsigned int offset = CACHE_COLOUR(vaddr);
+ 	unsigned long kfrom, kto;
+ 
+-	if (test_and_clear_bit(PG_dcache_dirty, &from->flags))
++	if (!test_and_set_bit(PG_dcache_clean, &from->flags))
+ 		__flush_dcache_page(page_mapping(from), from);
+ 
+ 	/* FIXME: not highmem safe */

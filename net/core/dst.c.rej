@@ -1,0 +1,10 @@
+--- net/core/dst.c
++++ net/core/dst.c
+@@ -370,6 +397,7 @@
+ 
+ static struct notifier_block dst_dev_notifier = {
+ 	.notifier_call	= dst_dev_event,
++	.priority = -10, /* must be called after other network notifiers */
+ };
+ 
+ void __init dst_init(void)

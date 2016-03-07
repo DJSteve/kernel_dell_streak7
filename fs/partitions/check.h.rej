@@ -1,0 +1,11 @@
+--- fs/partitions/check.h
++++ fs/partitions/check.h
+@@ -13,6 +14,8 @@
+ 		sector_t from;
+ 		sector_t size;
+ 		int flags;
++		bool has_info;
++		struct partition_meta_info info;
+ 	} parts[DISK_MAX_PARTS];
+ 	int next;
+ 	int limit;

@@ -1,0 +1,12 @@
+--- net/mac80211/rate.c
++++ net/mac80211/rate.c
+@@ -329,6 +330,9 @@
+ 		 * if needed.
+ 		 */
+ 		for (i = 0; i < IEEE80211_TX_MAX_RATES; i++) {
++			/* Skip invalid rates */
++			if (info->control.rates[i].idx < 0)
++				break;
+ 			/* Rate masking supports only legacy rates for now */
+ 			if (info->control.rates[i].flags & IEEE80211_TX_RC_MCS)
+ 				continue;

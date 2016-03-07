@@ -1,10 +1,11 @@
---- kernel-parameters.txt
-+++ kernel-parameters.txt
-@@ -879,6 +879,7 @@
- 			     controller
- 	i8042.nopnp	[HW] Don't use ACPIPnP / PnPBIOS to discover KBD/AUX
- 			     controllers
-+	i8042.notimeout	[HW] Ignore timeout condition signalled by conroller
- 	i8042.reset	[HW] Reset the controller during init and cleanup
- 	i8042.unlock	[HW] Unlock (ignore) the keylock
+--- Documentation/kernel-parameters.txt
++++ Documentation/kernel-parameters.txt
+@@ -1759,7 +1773,7 @@
+ 
+ 	nousb		[USB] Disable the USB subsystem
+ 
+-	nowatchdog	[KNL] Disable the lockup detector.
++	nowatchdog	[KNL] Disable the lockup detector (NMI watchdog).
+ 
+ 	nowb		[ARM]
  

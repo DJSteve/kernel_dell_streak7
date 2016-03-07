@@ -1,0 +1,128 @@
+--- drivers/net/r8169.c
++++ drivers/net/r8169.c
+@@ -856,10 +857,10 @@
+ 	else
+ 		tp->features &= ~RTL_FEATURE_WOL;
+ 	__rtl8169_set_wol(tp, wol->wolopts);
+-	device_set_wakeup_enable(&tp->pci_dev->dev, wol->wolopts);
+-
+ 	spin_unlock_irq(&tp->lock);
+ 
++	device_set_wakeup_enable(&tp->pci_dev->dev, wol->wolopts);
++
+ 	return 0;
+ }
+ 
+@@ -2941,7 +2946,7 @@
+ 		.hw_start	= rtl_hw_start_8168,
+ 		.region		= 2,
+ 		.align		= 8,
+-		.intr_event	= SYSErr | RxFIFOOver | LinkChg | RxOverflow |
++		.intr_event	= SYSErr | LinkChg | RxOverflow |
+ 				  TxErr | TxOK | RxOK | RxErr,
+ 		.napi_event	= TxErr | TxOK | RxOK | RxOverflow,
+ 		.features	= RTL_FEATURE_GMII | RTL_FEATURE_MSI,
+@@ -4445,40 +4435,34 @@
+ 	return (status & (FirstFrag | LastFrag)) != (FirstFrag | LastFrag);
+ }
+ 
+-static inline void rtl8169_rx_csum(struct sk_buff *skb, struct RxDesc *desc)
++static inline void rtl8169_rx_csum(struct sk_buff *skb, u32 opts1)
+ {
+-	u32 opts1 = le32_to_cpu(desc->opts1);
+ 	u32 status = opts1 & RxProtoMask;
+ 
+ 	if (((status == RxProtoTCP) && !(opts1 & TCPFail)) ||
+-	    ((status == RxProtoUDP) && !(opts1 & UDPFail)) ||
+-	    ((status == RxProtoIP) && !(opts1 & IPFail)))
++	    ((status == RxProtoUDP) && !(opts1 & UDPFail)))
+ 		skb->ip_summed = CHECKSUM_UNNECESSARY;
+ 	else
+-		skb->ip_summed = CHECKSUM_NONE;
++		skb_checksum_none_assert(skb);
+ }
+ 
+-static inline bool rtl8169_try_rx_copy(struct sk_buff **sk_buff,
+-				       struct rtl8169_private *tp, int pkt_size,
+-				       dma_addr_t addr)
++static struct sk_buff *rtl8169_try_rx_copy(void *data,
++					   struct rtl8169_private *tp,
++					   int pkt_size,
++					   dma_addr_t addr)
+ {
+ 	struct sk_buff *skb;
+-	bool done = false;
+-
+-	if (pkt_size >= rx_copybreak)
+-		goto out;
++	struct device *d = &tp->pci_dev->dev;
+ 
++	data = rtl8169_align(data);
++	dma_sync_single_for_cpu(d, addr, pkt_size, DMA_FROM_DEVICE);
++	prefetch(data);
+ 	skb = netdev_alloc_skb_ip_align(tp->dev, pkt_size);
+-	if (!skb)
+-		goto out;
++	if (skb)
++		memcpy(skb->data, data, pkt_size);
++	dma_sync_single_for_device(d, addr, pkt_size, DMA_FROM_DEVICE);
+ 
+-	dma_sync_single_for_cpu(&tp->pci_dev->dev, addr, pkt_size,
+-				PCI_DMA_FROMDEVICE);
+-	skb_copy_from_linear_data(*sk_buff, skb->data, pkt_size);
+-	*sk_buff = skb;
+-	done = true;
+-out:
+-	return done;
++	return skb;
+ }
+ 
+ /*
+@@ -4536,28 +4519,25 @@
+ 			if (unlikely(rtl8169_fragmented_frame(status))) {
+ 				dev->stats.rx_dropped++;
+ 				dev->stats.rx_length_errors++;
+-				rtl8169_mark_to_asic(desc, tp->rx_buf_sz);
++				rtl8169_mark_to_asic(desc, rx_buf_sz);
+ 				continue;
+ 			}
+ 
+-			rtl8169_rx_csum(skb, desc);
+-
+-			if (rtl8169_try_rx_copy(&skb, tp, pkt_size, addr)) {
+-				dma_sync_single_for_device(&pdev->dev, addr,
+-					pkt_size, PCI_DMA_FROMDEVICE);
+-				rtl8169_mark_to_asic(desc, tp->rx_buf_sz);
+-			} else {
+-				dma_unmap_single(&pdev->dev, addr, tp->rx_buf_sz,
+-						 PCI_DMA_FROMDEVICE);
+-				tp->Rx_skbuff[entry] = NULL;
++			skb = rtl8169_try_rx_copy(tp->Rx_databuff[entry],
++						  tp, pkt_size, addr);
++			rtl8169_mark_to_asic(desc, rx_buf_sz);
++			if (!skb) {
++				dev->stats.rx_dropped++;
++				continue;
+ 			}
+ 
++			rtl8169_rx_csum(skb, status);
+ 			skb_put(skb, pkt_size);
+ 			skb->protocol = eth_type_trans(skb, dev);
+ 
+ 			if (rtl8169_rx_vlan_skb(tp, desc, skb, polling) < 0) {
+ 				if (likely(polling))
+-					netif_receive_skb(skb);
++					napi_gro_receive(&tp->napi, skb);
+ 				else
+ 					netif_rx(skb);
+ 			}
+@@ -4606,7 +4573,8 @@
+ 		}
+ 
+ 		/* Work around for rx fifo overflow */
+-		if (unlikely(status & RxFIFOOver)) {
++		if (unlikely(status & RxFIFOOver) &&
++		(tp->mac_version == RTL_GIGA_MAC_VER_11)) {
+ 			netif_stop_queue(dev);
+ 			rtl8169_tx_timeout(dev);
+ 			break;

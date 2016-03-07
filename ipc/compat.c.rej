@@ -1,0 +1,29 @@
+--- ipc/compat.c
++++ ipc/compat.c
+@@ -241,6 +241,8 @@
+ 	struct semid64_ds __user *up64;
+ 	int version = compat_ipc_parse_version(&third);
+ 
++	memset(&s64, 0, sizeof(s64));
++
+ 	if (!uptr)
+ 		return -EINVAL;
+ 	if (get_user(pad, (u32 __user *) uptr))
+@@ -421,6 +423,8 @@
+ 	int version = compat_ipc_parse_version(&second);
+ 	void __user *p;
+ 
++	memset(&m64, 0, sizeof(m64));
++
+ 	switch (second & (~IPC_64)) {
+ 	case IPC_INFO:
+ 	case IPC_RMID:
+@@ -594,6 +598,8 @@
+ 	int err, err2;
+ 	int version = compat_ipc_parse_version(&second);
+ 
++	memset(&s64, 0, sizeof(s64));
++
+ 	switch (second & (~IPC_64)) {
+ 	case IPC_RMID:
+ 	case SHM_LOCK:

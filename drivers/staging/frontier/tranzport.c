@@ -767,6 +767,7 @@ static const struct file_operations usb_tranzport_fops = {
 	.open = usb_tranzport_open,
 	.release = usb_tranzport_release,
 	.poll = usb_tranzport_poll,
+	.llseek = no_llseek,
 };
 
 /*
@@ -795,7 +796,7 @@ static int usb_tranzport_probe(struct usb_interface *intf,
 	int true_size;
 	int retval = -ENOMEM;
 
-	/* allocate memory for our device state and intialize it */
+	/* allocate memory for our device state and initialize it */
 
 	 dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (dev == NULL) {

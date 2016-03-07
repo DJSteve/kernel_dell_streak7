@@ -1,0 +1,10 @@
+--- arch/x86/kernel/cpu/cpufreq/acpi-cpufreq.c
++++ arch/x86/kernel/cpu/cpufreq/acpi-cpufreq.c
+@@ -701,6 +701,7 @@
+ 		per_cpu(acfreq_data, policy->cpu) = NULL;
+ 		acpi_processor_unregister_performance(data->acpi_data,
+ 						      policy->cpu);
++		kfree(data->freq_table);
+ 		kfree(data);
+ 	}
+ 

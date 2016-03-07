@@ -1,0 +1,35 @@
+--- drivers/gpu/drm/i915/intel_sdvo.c
++++ drivers/gpu/drm/i915/intel_sdvo.c
+@@ -1370,22 +1250,25 @@
+ intel_sdvo_detect(struct drm_connector *connector, bool force)
+ {
+ 	uint16_t response;
+-	struct drm_encoder *encoder = intel_attached_encoder(connector);
+-	struct intel_sdvo *intel_sdvo = enc_to_intel_sdvo(encoder);
++	struct intel_sdvo *intel_sdvo = intel_attached_sdvo(connector);
+ 	struct intel_sdvo_connector *intel_sdvo_connector = to_intel_sdvo_connector(connector);
+ 	enum drm_connector_status ret;
+ 
+ 	if (!intel_sdvo_write_cmd(intel_sdvo,
+-			     SDVO_CMD_GET_ATTACHED_DISPLAYS, NULL, 0))
++				  SDVO_CMD_GET_ATTACHED_DISPLAYS, NULL, 0))
+ 		return connector_status_unknown;
+-	if (intel_sdvo->is_tv) {
+-		/* add 30ms delay when the output type is SDVO-TV */
++
++	/* add 30ms delay when the output type might be TV */
++	if (intel_sdvo->caps.output_flags &
++	    (SDVO_OUTPUT_SVID0 | SDVO_OUTPUT_CVBS0))
+ 		mdelay(30);
+-	}
++
+ 	if (!intel_sdvo_read_response(intel_sdvo, &response, 2))
+ 		return connector_status_unknown;
+ 
+-	DRM_DEBUG_KMS("SDVO response %d %d\n", response & 0xff, response >> 8);
++	DRM_DEBUG_KMS("SDVO response %d %d [%x]\n",
++		      response & 0xff, response >> 8,
++		      intel_sdvo_connector->output_flag);
+ 
+ 	if (response == 0)
+ 		return connector_status_disconnected;

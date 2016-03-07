@@ -1,0 +1,11 @@
+--- drivers/net/ifb.c
++++ drivers/net/ifb.c
+@@ -104,6 +104,8 @@
+ 			rcu_read_unlock();
+ 			dev_kfree_skb(skb);
+ 			stats->tx_dropped++;
++			if (skb_queue_len(&dp->tq) != 0)
++				goto resched;
+ 			break;
+ 		}
+ 		rcu_read_unlock();

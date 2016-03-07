@@ -1,0 +1,11 @@
+--- include/linux/netfilter.h
++++ include/linux/netfilter.h
+@@ -215,7 +215,7 @@
+ 	int ret;
+ 
+ 	if (!cond ||
+-	    (ret = nf_hook_thresh(pf, hook, skb, in, out, okfn, INT_MIN) == 1))
++	    ((ret = nf_hook_thresh(pf, hook, skb, in, out, okfn, INT_MIN)) == 1))
+ 		ret = okfn(skb);
+ 	return ret;
+ }

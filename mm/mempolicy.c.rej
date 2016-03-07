@@ -1,0 +1,11 @@
+--- mm/mempolicy.c
++++ mm/mempolicy.c
+@@ -1600,7 +1612,7 @@
+ 		(void)first_zones_zonelist(zonelist, highest_zoneidx,
+ 							&policy->v.nodes,
+ 							&zone);
+-		return zone->node;
++		return zone ? zone->node : numa_node_id();
+ 	}
+ 
+ 	default:

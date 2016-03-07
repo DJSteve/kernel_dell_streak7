@@ -1,0 +1,20 @@
+--- drivers/infiniband/hw/nes/nes_cm.c
++++ drivers/infiniband/hw/nes/nes_cm.c
+@@ -2700,7 +2699,7 @@
+ 	nesibdev = nesvnic->nesibdev;
+ 
+ 	nes_debug(NES_DBG_CM, "netdev refcnt = %u.\n",
+-			atomic_read(&nesvnic->netdev->refcnt));
++			netdev_refcnt_read(nesvnic->netdev));
+ 
+ 	if (nesqp->active_conn) {
+ 
+@@ -2790,7 +2789,7 @@
+ 	atomic_inc(&cm_accepts);
+ 
+ 	nes_debug(NES_DBG_CM, "netdev refcnt = %u.\n",
+-			atomic_read(&nesvnic->netdev->refcnt));
++			netdev_refcnt_read(nesvnic->netdev));
+ 
+ 	/* allocate the ietf frame and space for private data */
+ 	nesqp->ietf_frame = pci_alloc_consistent(nesdev->pcidev,

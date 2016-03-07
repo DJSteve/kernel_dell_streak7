@@ -1,0 +1,15 @@
+--- kernel/pm_qos_params.c
++++ kernel/pm_qos_params.c
+@@ -121,10 +122,10 @@
+ 
+ 	switch (o->type) {
+ 	case PM_QOS_MIN:
+-		return plist_last(&o->requests)->prio;
++		return plist_first(&o->requests)->prio;
+ 
+ 	case PM_QOS_MAX:
+-		return plist_first(&o->requests)->prio;
++		return plist_last(&o->requests)->prio;
+ 
+ 	default:
+ 		/* runtime check for not using enum */

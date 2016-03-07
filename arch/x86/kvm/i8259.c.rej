@@ -1,6 +1,13 @@
---- i8259.c
-+++ i8259.c
-@@ -570,6 +570,8 @@
+--- arch/x86/kvm/i8259.c
++++ arch/x86/kvm/i8259.c
+@@ -569,12 +574,14 @@
+ 	s = kzalloc(sizeof(struct kvm_pic), GFP_KERNEL);
+ 	if (!s)
+ 		return NULL;
+-	raw_spin_lock_init(&s->lock);
++	spin_lock_init(&s->lock);
+ 	s->kvm = kvm;
+ 	s->pics[0].elcr_mask = 0xf8;
  	s->pics[1].elcr_mask = 0xde;
  	s->pics[0].pics_state = s;
  	s->pics[1].pics_state = s;

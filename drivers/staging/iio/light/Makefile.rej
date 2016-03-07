@@ -1,0 +1,7 @@
+--- drivers/staging/iio/light/Makefile
++++ drivers/staging/iio/light/Makefile
+@@ -3,3 +3,4 @@
+ #
+ 
+ obj-$(CONFIG_SENSORS_TSL2563)	+= tsl2563.o
++obj-$(CONFIG_SENSORS_ISL29018)	+= isl29018.o

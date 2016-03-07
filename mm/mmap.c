@@ -28,6 +28,7 @@
 #include <linux/rmap.h>
 #include <linux/mmu_notifier.h>
 #include <linux/perf_event.h>
+#include <linux/audit.h>
 
 #include <asm/uaccess.h>
 #include <asm/cacheflush.h>
@@ -1108,6 +1109,7 @@ SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 	unsigned long retval = -EBADF;
 
 	if (!(flags & MAP_ANONYMOUS)) {
+		audit_mmap_fd(fd, flags);
 		if (unlikely(flags & MAP_HUGETLB))
 			return -EINVAL;
 		file = fget(fd);
@@ -2574,6 +2576,7 @@ static void vm_lock_mapping(struct mm_struct *mm, struct address_space *mapping)
  */
 int mm_take_all_locks(struct mm_struct *mm)
 {
+	int ret;
 	struct vm_area_struct *vma;
 	struct anon_vma_chain *avc;
 	int ret = -EINTR;

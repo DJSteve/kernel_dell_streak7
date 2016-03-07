@@ -1,0 +1,84 @@
+--- fs/exec.c
++++ fs/exec.c
+@@ -164,7 +171,26 @@
+ 
+ #ifdef CONFIG_MMU
+ 
+-static struct page *get_arg_page(struct linux_binprm *bprm, unsigned long pos,
++void acct_arg_size(struct linux_binprm *bprm, unsigned long pages)
++{
++	struct mm_struct *mm = current->mm;
++	long diff = (long)(pages - bprm->vma_pages);
++
++	if (!mm || !diff)
++		return;
++
++	bprm->vma_pages = pages;
++
++#ifdef SPLIT_RSS_COUNTING
++	add_mm_counter(mm, MM_ANONPAGES, diff);
++#else
++	spin_lock(&mm->page_table_lock);
++	add_mm_counter(mm, MM_ANONPAGES, diff);
++	spin_unlock(&mm->page_table_lock);
++#endif
++}
++
++struct page *get_arg_page(struct linux_binprm *bprm, unsigned long pos,
+ 		int write)
+ {
+ 	struct page *page;
+@@ -256,6 +284,11 @@
+ 	vma->vm_flags = VM_STACK_FLAGS | VM_STACK_INCOMPLETE_SETUP;
+ 	vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
+ 	INIT_LIST_HEAD(&vma->anon_vma_chain);
++
++	err = security_file_mmap(NULL, 0, 0, 0, vma->vm_start, 1);
++	if (err)
++		goto err;
++
+ 	err = insert_vm_struct(mm, vma);
+ 	if (err)
+ 		goto err;
+@@ -278,7 +311,11 @@
+ 
+ #else
+ 
+-static struct page *get_arg_page(struct linux_binprm *bprm, unsigned long pos,
++void acct_arg_size(struct linux_binprm *bprm, unsigned long pages)
++{
++}
++
++struct page *get_arg_page(struct linux_binprm *bprm, unsigned long pos,
+ 		int write)
+ {
+ 	struct page *page;
+@@ -1005,13 +1046,14 @@
+ 	/*
+ 	 * Release all of the old mmap stuff
+ 	 */
++	acct_arg_size(bprm, 0);
+ 	retval = exec_mmap(bprm->mm);
+ 	if (retval)
+ 		goto out;
+ 
+ 	bprm->mm = NULL;		/* We're using it now */
+ 
+-	current->flags &= ~PF_RANDOMIZE;
++	current->flags &= ~(PF_RANDOMIZE | PF_KTHREAD);
+ 	flush_thread();
+ 	current->personality &= ~bprm->per_clear;
+ 
+@@ -1428,8 +1469,10 @@
+ 	return retval;
+ 
+ out:
+-	if (bprm->mm)
+-		mmput (bprm->mm);
++	if (bprm->mm) {
++		acct_arg_size(bprm, 0);
++		mmput(bprm->mm);
++	}
+ 
+ out_file:
+ 	if (bprm->file) {

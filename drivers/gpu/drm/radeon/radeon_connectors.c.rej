@@ -1,0 +1,163 @@
+--- drivers/gpu/drm/radeon/radeon_connectors.c
++++ drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1175,6 +1231,8 @@
+ 		/* no HPD on analog connectors */
+ 		radeon_connector->hpd.hpd = RADEON_HPD_NONE;
+ 		connector->polled = DRM_CONNECTOR_POLL_CONNECT;
++		connector->interlace_allowed = true;
++		connector->doublescan_allowed = true;
+ 		break;
+ 	case DRM_MODE_CONNECTOR_DVIA:
+ 		drm_connector_init(dev, &radeon_connector->base, &radeon_vga_connector_funcs, connector_type);
+@@ -1190,6 +1248,8 @@
+ 					      1);
+ 		/* no HPD on analog connectors */
+ 		radeon_connector->hpd.hpd = RADEON_HPD_NONE;
++		connector->interlace_allowed = true;
++		connector->doublescan_allowed = true;
+ 		break;
+ 	case DRM_MODE_CONNECTOR_DVII:
+ 	case DRM_MODE_CONNECTOR_DVID:
+@@ -1209,16 +1269,28 @@
+ 		drm_connector_attach_property(&radeon_connector->base,
+ 					      rdev->mode_info.coherent_mode_property,
+ 					      1);
+-		if (ASIC_IS_AVIVO(rdev))
++		if (ASIC_IS_AVIVO(rdev)) {
+ 			drm_connector_attach_property(&radeon_connector->base,
+ 						      rdev->mode_info.underscan_property,
+ 						      UNDERSCAN_AUTO);
++			drm_connector_attach_property(&radeon_connector->base,
++						      rdev->mode_info.underscan_hborder_property,
++						      0);
++			drm_connector_attach_property(&radeon_connector->base,
++						      rdev->mode_info.underscan_vborder_property,
++						      0);
++		}
+ 		if (connector_type == DRM_MODE_CONNECTOR_DVII) {
+ 			radeon_connector->dac_load_detect = true;
+ 			drm_connector_attach_property(&radeon_connector->base,
+ 						      rdev->mode_info.load_detect_property,
+ 						      1);
+ 		}
++		connector->interlace_allowed = true;
++		if (connector_type == DRM_MODE_CONNECTOR_DVII)
++			connector->doublescan_allowed = true;
++		else
++			connector->doublescan_allowed = false;
+ 		break;
+ 	case DRM_MODE_CONNECTOR_HDMIA:
+ 	case DRM_MODE_CONNECTOR_HDMIB:
+@@ -1237,11 +1309,23 @@
+ 		drm_connector_attach_property(&radeon_connector->base,
+ 					      rdev->mode_info.coherent_mode_property,
+ 					      1);
+-		if (ASIC_IS_AVIVO(rdev))
++		if (ASIC_IS_AVIVO(rdev)) {
+ 			drm_connector_attach_property(&radeon_connector->base,
+ 						      rdev->mode_info.underscan_property,
+ 						      UNDERSCAN_AUTO);
++			drm_connector_attach_property(&radeon_connector->base,
++						      rdev->mode_info.underscan_hborder_property,
++						      0);
++			drm_connector_attach_property(&radeon_connector->base,
++						      rdev->mode_info.underscan_vborder_property,
++						      0);
++		}
+ 		subpixel_order = SubPixelHorizontalRGB;
++		connector->interlace_allowed = true;
++		if (connector_type == DRM_MODE_CONNECTOR_HDMIB)
++			connector->doublescan_allowed = true;
++		else
++			connector->doublescan_allowed = false;
+ 		break;
+ 	case DRM_MODE_CONNECTOR_DisplayPort:
+ 	case DRM_MODE_CONNECTOR_eDP:
+@@ -1268,10 +1352,20 @@
+ 		drm_connector_attach_property(&radeon_connector->base,
+ 					      rdev->mode_info.coherent_mode_property,
+ 					      1);
+-		if (ASIC_IS_AVIVO(rdev))
++		if (ASIC_IS_AVIVO(rdev)) {
+ 			drm_connector_attach_property(&radeon_connector->base,
+ 						      rdev->mode_info.underscan_property,
+ 						      UNDERSCAN_AUTO);
++			drm_connector_attach_property(&radeon_connector->base,
++						      rdev->mode_info.underscan_hborder_property,
++						      0);
++			drm_connector_attach_property(&radeon_connector->base,
++						      rdev->mode_info.underscan_vborder_property,
++						      0);
++		}
++		connector->interlace_allowed = true;
++		/* in theory with a DP to VGA converter... */
++		connector->doublescan_allowed = false;
+ 		break;
+ 	case DRM_MODE_CONNECTOR_SVIDEO:
+ 	case DRM_MODE_CONNECTOR_Composite:
+@@ -1287,6 +1381,8 @@
+ 					      radeon_atombios_get_tv_info(rdev));
+ 		/* no HPD on analog connectors */
+ 		radeon_connector->hpd.hpd = RADEON_HPD_NONE;
++		connector->interlace_allowed = false;
++		connector->doublescan_allowed = false;
+ 		break;
+ 	case DRM_MODE_CONNECTOR_LVDS:
+ 		radeon_dig_connector = kzalloc(sizeof(struct radeon_connector_atom_dig), GFP_KERNEL);
+@@ -1305,6 +1401,8 @@
+ 					      dev->mode_config.scaling_mode_property,
+ 					      DRM_MODE_SCALE_FULLSCREEN);
+ 		subpixel_order = SubPixelHorizontalRGB;
++		connector->interlace_allowed = false;
++		connector->doublescan_allowed = false;
+ 		break;
+ 	}
+ 
+@@ -1382,6 +1480,8 @@
+ 		/* no HPD on analog connectors */
+ 		radeon_connector->hpd.hpd = RADEON_HPD_NONE;
+ 		connector->polled = DRM_CONNECTOR_POLL_CONNECT;
++		connector->interlace_allowed = true;
++		connector->doublescan_allowed = true;
+ 		break;
+ 	case DRM_MODE_CONNECTOR_DVIA:
+ 		drm_connector_init(dev, &radeon_connector->base, &radeon_vga_connector_funcs, connector_type);
+@@ -1397,6 +1497,8 @@
+ 					      1);
+ 		/* no HPD on analog connectors */
+ 		radeon_connector->hpd.hpd = RADEON_HPD_NONE;
++		connector->interlace_allowed = true;
++		connector->doublescan_allowed = true;
+ 		break;
+ 	case DRM_MODE_CONNECTOR_DVII:
+ 	case DRM_MODE_CONNECTOR_DVID:
+@@ -1414,6 +1516,11 @@
+ 						      1);
+ 		}
+ 		subpixel_order = SubPixelHorizontalRGB;
++		connector->interlace_allowed = true;
++		if (connector_type == DRM_MODE_CONNECTOR_DVII)
++			connector->doublescan_allowed = true;
++		else
++			connector->doublescan_allowed = false;
+ 		break;
+ 	case DRM_MODE_CONNECTOR_SVIDEO:
+ 	case DRM_MODE_CONNECTOR_Composite:
+@@ -1436,6 +1543,8 @@
+ 					      radeon_combios_get_tv_info(rdev));
+ 		/* no HPD on analog connectors */
+ 		radeon_connector->hpd.hpd = RADEON_HPD_NONE;
++		connector->interlace_allowed = false;
++		connector->doublescan_allowed = false;
+ 		break;
+ 	case DRM_MODE_CONNECTOR_LVDS:
+ 		drm_connector_init(dev, &radeon_connector->base, &radeon_lvds_connector_funcs, connector_type);
+@@ -1449,6 +1558,8 @@
+ 					      dev->mode_config.scaling_mode_property,
+ 					      DRM_MODE_SCALE_FULLSCREEN);
+ 		subpixel_order = SubPixelHorizontalRGB;
++		connector->interlace_allowed = false;
++		connector->doublescan_allowed = false;
+ 		break;
+ 	}
+ 

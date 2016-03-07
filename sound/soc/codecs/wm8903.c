@@ -366,10 +366,11 @@ static void __init wm8903_debuginit(struct snd_soc_codec* codec)
 #endif
 
 struct wm8903_priv {
-	struct snd_soc_codec codec;
+
 	u16 reg_cache[ARRAY_SIZE(wm8903_reg_defaults)];
 
 	int sysclk;
+	int irq;
 
 	/* Reference counts */
 	int class_w_users;
@@ -619,7 +620,6 @@ static void DumpWM8903(struct snd_soc_codec *codec)
 static int wm8903_run_sequence(struct snd_soc_codec *codec, unsigned int start)
 {
 	u16 reg[5];
-	struct i2c_client *i2c = codec->control_data;
 	struct wm8903_priv *wm8903 = snd_soc_codec_get_drvdata(codec);
 
 	BUG_ON(start > 48);
@@ -629,7 +629,7 @@ static int wm8903_run_sequence(struct snd_soc_codec *codec, unsigned int start)
 	snd_soc_write(codec, WM8903_WRITE_SEQUENCER_0,
 		      reg[0] | WM8903_WSEQ_ENA);
 
-	dev_dbg(&i2c->dev, "Starting sequence at %d\n", start);
+	dev_dbg(codec->dev, "Starting sequence at %d\n", start);
 
 	snd_soc_write(codec, WM8903_WRITE_SEQUENCER_3,
 		     start | WM8903_WSEQ_START);
@@ -644,7 +644,7 @@ static int wm8903_run_sequence(struct snd_soc_codec *codec, unsigned int start)
 		reg[4] = snd_soc_read(codec, WM8903_WRITE_SEQUENCER_4);
 	} while (reg[4] & WM8903_WSEQ_BUSY);
 
-	dev_dbg(&i2c->dev, "Sequence complete\n");
+	dev_dbg(codec->dev, "Sequence complete\n");
 
 	/* Disable the sequencer again if we enabled it */
 	snd_soc_write(codec, WM8903_WRITE_SEQUENCER_0, reg[0]);
@@ -789,7 +789,6 @@ static int wm8903_class_w_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_dapm_widget *widget = snd_kcontrol_chip(kcontrol);
 	struct snd_soc_codec *codec = widget->codec;
 	struct wm8903_priv *wm8903 = snd_soc_codec_get_drvdata(codec);
-	struct i2c_client *i2c = codec->control_data;
 	u16 reg;
 	int ret;
 
@@ -798,7 +797,7 @@ static int wm8903_class_w_put(struct snd_kcontrol *kcontrol,
 	/* Turn it off if we're about to enable bypass */
 	if (ucontrol->value.integer.value[0]) {
 		if (wm8903->class_w_users == 0) {
-			dev_dbg(&i2c->dev, "Disabling Class W\n");
+			dev_dbg(codec->dev, "Disabling Class W\n");
 			snd_soc_write(codec, WM8903_CLASS_W_0, reg &
 				     ~(WM8903_CP_DYN_FREQ | WM8903_CP_DYN_V));
 		}
@@ -811,14 +810,14 @@ static int wm8903_class_w_put(struct snd_kcontrol *kcontrol,
 	/* If we've just disabled the last bypass path turn Class W on */
 	if (!ucontrol->value.integer.value[0]) {
 		if (wm8903->class_w_users == 1) {
-			dev_dbg(&i2c->dev, "Enabling Class W\n");
+			dev_dbg(codec->dev, "Enabling Class W\n");
 			snd_soc_write(codec, WM8903_CLASS_W_0, reg |
 				     WM8903_CP_DYN_FREQ | WM8903_CP_DYN_V);
 		}
 		wm8903->class_w_users--;
 	}
 
-	dev_dbg(&i2c->dev, "Bypass use count now %d\n",
+	dev_dbg(codec->dev, "Bypass use count now %d\n",
 		wm8903->class_w_users);
 
 	return ret;
@@ -1287,7 +1286,6 @@ static int wm8903_add_widgets(struct snd_soc_codec *codec)
 static int wm8903_set_bias_level(struct snd_soc_codec *codec,
 				 enum snd_soc_bias_level level)
 {
-	struct i2c_client *i2c = codec->control_data;
 	u16 reg, reg2;
 
 	switch (level) {
@@ -1327,7 +1325,7 @@ static int wm8903_set_bias_level(struct snd_soc_codec *codec,
 			/* By default no bypass paths are enabled so
 			 * enable Class W support.
 			 */
-			dev_dbg(&i2c->dev, "Enabling Class W\n");
+			dev_dbg(codec->dev, "Enabling Class W\n");
 			snd_soc_write(codec, WM8903_CLASS_W_0, reg |
 				     WM8903_CP_DYN_FREQ | WM8903_CP_DYN_V);
 		}
@@ -1591,10 +1589,8 @@ static int wm8903_startup(struct snd_pcm_substream *substream,
 			  struct snd_soc_dai *dai)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_device *socdev = rtd->socdev;
-	struct snd_soc_codec *codec = socdev->card->codec;
+	struct snd_soc_codec *codec = rtd->codec;
 	struct wm8903_priv *wm8903 = snd_soc_codec_get_drvdata(codec);
-	struct i2c_client *i2c = codec->control_data;
 	struct snd_pcm_runtime *master_runtime;
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
@@ -1608,7 +1604,7 @@ static int wm8903_startup(struct snd_pcm_substream *substream,
 	if (wm8903->master_substream) {
 		master_runtime = wm8903->master_substream->runtime;
 
-		dev_dbg(&i2c->dev, "Constraining to %d bits\n",
+		dev_dbg(codec->dev, "Constraining to %d bits\n",
 			master_runtime->sample_bits);
 
 		snd_pcm_hw_constraint_minmax(substream->runtime,
@@ -1627,8 +1623,7 @@ static void wm8903_shutdown(struct snd_pcm_substream *substream,
 			    struct snd_soc_dai *dai)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_device *socdev = rtd->socdev;
-	struct snd_soc_codec *codec = socdev->card->codec;
+	struct snd_soc_codec *codec = rtd->codec;
 	struct wm8903_priv *wm8903 = snd_soc_codec_get_drvdata(codec);
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
@@ -1647,10 +1642,8 @@ static int wm8903_hw_params(struct snd_pcm_substream *substream,
 			    struct snd_soc_dai *dai)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_device *socdev = rtd->socdev;
-	struct snd_soc_codec *codec = socdev->card->codec;
+	struct snd_soc_codec *codec =rtd->codec;
 	struct wm8903_priv *wm8903 = snd_soc_codec_get_drvdata(codec);
-	struct i2c_client *i2c = codec->control_data;
 	int fs = params_rate(params);
 	int bclk;
 	int bclk_div;
@@ -1669,7 +1662,7 @@ static int wm8903_hw_params(struct snd_pcm_substream *substream,
 	u16 dac_digital1 = snd_soc_read(codec, WM8903_DAC_DIGITAL_1);
 
 	if (substream == wm8903->slave_substream) {
-		dev_dbg(&i2c->dev, "Ignoring hw_params for slave substream\n");
+		dev_dbg(codec->dev, "Ignoring hw_params for slave substream\n");
 		return 0;
 	}
 
@@ -1695,7 +1688,7 @@ static int wm8903_hw_params(struct snd_pcm_substream *substream,
 		switch (sample_rates[dsp_config].rate) {
 		case 88200:
 		case 96000:
-			dev_err(&i2c->dev, "%dHz unsupported by ADC\n",
+			dev_err(codec->dev, "%dHz unsupported by ADC\n",
 				fs);
 			return -EINVAL;
 
@@ -1703,7 +1696,7 @@ static int wm8903_hw_params(struct snd_pcm_substream *substream,
 			break;
 		}
 
-	dev_dbg(&i2c->dev, "DSP fs = %dHz\n", sample_rates[dsp_config].rate);
+	dev_dbg(codec->dev, "DSP fs = %dHz\n", sample_rates[dsp_config].rate);
 	clock1 &= ~WM8903_SAMPLE_RATE_MASK;
 	clock1 |= sample_rates[dsp_config].value;
 
@@ -1729,7 +1722,7 @@ static int wm8903_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
-	dev_dbg(&i2c->dev, "MCLK = %dHz, target sample rate = %dHz\n",
+	dev_dbg(codec->dev, "MCLK = %dHz, target sample rate = %dHz\n",
 		wm8903->sysclk, fs);
 
 	/* We may not have an MCLK which allows us to generate exactly
@@ -1764,12 +1757,12 @@ static int wm8903_hw_params(struct snd_pcm_substream *substream,
 	clock1 |= clk_sys_ratios[clk_config].rate << WM8903_CLK_SYS_RATE_SHIFT;
 	clock1 |= clk_sys_ratios[clk_config].mode << WM8903_CLK_SYS_MODE_SHIFT;
 
-	dev_dbg(&i2c->dev, "CLK_SYS_RATE=%x, CLK_SYS_MODE=%x div=%d\n",
+	dev_dbg(codec->dev, "CLK_SYS_RATE=%x, CLK_SYS_MODE=%x div=%d\n",
 		clk_sys_ratios[clk_config].rate,
 		clk_sys_ratios[clk_config].mode,
 		clk_sys_ratios[clk_config].div);
 
-	dev_dbg(&i2c->dev, "Actual CLK_SYS = %dHz\n", clk_sys);
+	dev_dbg(codec->dev, "Actual CLK_SYS = %dHz\n", clk_sys);
 
 	/* We may not get quite the right frequency if using
 	 * approximate clocks so look for the closest match that is
@@ -1791,7 +1784,7 @@ static int wm8903_hw_params(struct snd_pcm_substream *substream,
 	aif2 &= ~WM8903_BCLK_DIV_MASK;
 	aif3 &= ~WM8903_LRCLK_RATE_MASK;
 
-	dev_dbg(&i2c->dev, "BCLK ratio %d for %dHz - actual BCLK = %dHz\n",
+	dev_dbg(codec->dev, "BCLK ratio %d for %dHz - actual BCLK = %dHz\n",
 		bclk_divs[bclk_div].ratio / 10, bclk,
 		(clk_sys * 10) / bclk_divs[bclk_div].ratio);
 
@@ -1867,8 +1860,8 @@ EXPORT_SYMBOL_GPL(wm8903_mic_detect);
 
 static irqreturn_t wm8903_irq(int irq, void *data)
 {
-	struct wm8903_priv *wm8903 = data;
-	struct snd_soc_codec *codec = &wm8903->codec;
+	struct snd_soc_codec *codec = data;
+	struct wm8903_priv *wm8903 = snd_soc_codec_get_drvdata(codec);
 	int mic_report;
 	int int_pol;
 	int int_val = 0;
@@ -1950,8 +1943,8 @@ static struct snd_soc_dai_ops wm8903_dai_ops = {
 	.trigger	= wm8903_set_dai_trigger,
 };
 
-struct snd_soc_dai wm8903_dai = {
-	.name = "WM8903",
+static struct snd_soc_dai_driver wm8903_dai = {
+	.name = "wm8903-hifi",
 	.playback = {
 		.stream_name = "Playback",
 		.channels_min = 2,

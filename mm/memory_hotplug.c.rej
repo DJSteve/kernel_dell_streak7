@@ -1,0 +1,11 @@
+--- mm/memory_hotplug.c
++++ mm/memory_hotplug.c
+@@ -663,7 +667,7 @@
+  * Scanning pfn is much easier than scanning lru list.
+  * Scan pfn from start to end and Find LRU page.
+  */
+-int scan_lru_pages(unsigned long start, unsigned long end)
++static unsigned long scan_lru_pages(unsigned long start, unsigned long end)
+ {
+ 	unsigned long pfn;
+ 	struct page *page;

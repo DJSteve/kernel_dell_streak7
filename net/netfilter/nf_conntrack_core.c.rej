@@ -1,0 +1,12 @@
+--- net/netfilter/nf_conntrack_core.c
++++ net/netfilter/nf_conntrack_core.c
+@@ -1312,7 +1364,8 @@
+ 	if (!hash) {
+ 		*vmalloced = 1;
+ 		printk(KERN_WARNING "nf_conntrack: falling back to vmalloc.\n");
+-		hash = __vmalloc(sz, GFP_KERNEL | __GFP_ZERO, PAGE_KERNEL);
++		hash = __vmalloc(sz, GFP_KERNEL | __GFP_HIGHMEM | __GFP_ZERO,
++				 PAGE_KERNEL);
+ 	}
+ 
+ 	if (hash && nulls)

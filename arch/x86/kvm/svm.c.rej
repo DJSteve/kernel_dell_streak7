@@ -1,0 +1,72 @@
+--- arch/x86/kvm/svm.c
++++ arch/x86/kvm/svm.c
+@@ -1232,8 +1258,12 @@
+ 		if (old == new) {
+ 			/* cr0 write with ts and mp unchanged */
+ 			svm->vmcb->control.exit_code = SVM_EXIT_CR0_SEL_WRITE;
+-			if (nested_svm_exit_handled(svm) == NESTED_EXIT_DONE)
++			if (nested_svm_exit_handled(svm) == NESTED_EXIT_DONE) {
++				svm->nested.vmexit_rip = kvm_rip_read(vcpu);
++				svm->nested.vmexit_rsp = kvm_register_read(vcpu, VCPU_REGS_RSP);
++				svm->nested.vmexit_rax = kvm_register_read(vcpu, VCPU_REGS_RAX);
+ 				return;
++			}
+ 		}
+ 	}
+ 
+@@ -2798,7 +2928,7 @@
+ 	[SVM_EXIT_READ_CR4]			= emulate_on_interception,
+ 	[SVM_EXIT_READ_CR8]			= emulate_on_interception,
+ 	[SVM_EXIT_CR0_SEL_WRITE]		= emulate_on_interception,
+-	[SVM_EXIT_WRITE_CR0]			= emulate_on_interception,
++	[SVM_EXIT_WRITE_CR0]			= cr0_write_interception,
+ 	[SVM_EXIT_WRITE_CR3]			= emulate_on_interception,
+ 	[SVM_EXIT_WRITE_CR4]			= emulate_on_interception,
+ 	[SVM_EXIT_WRITE_CR8]			= cr8_write_interception,
+@@ -3391,6 +3534,7 @@
+ 	vcpu->arch.regs[VCPU_REGS_RIP] = svm->vmcb->save.rip;
+ 
+ 	load_host_msrs(vcpu);
++	kvm_load_ldt(ldt_selector);
+ 	loadsegment(fs, fs_selector);
+ #ifdef CONFIG_X86_64
+ 	load_gs_index(gs_selector);
+@@ -3398,7 +3542,6 @@
+ #else
+ 	loadsegment(gs, gs_selector);
+ #endif
+-	kvm_load_ldt(ldt_selector);
+ 
+ 	reload_tss(vcpu);
+ 
+@@ -3490,12 +3630,29 @@
+ static void svm_set_supported_cpuid(u32 func, struct kvm_cpuid_entry2 *entry)
+ {
+ 	switch (func) {
++	case 0x00000001:
++		/* Mask out xsave bit as long as it is not supported by SVM */
++		entry->ecx &= ~(bit(X86_FEATURE_XSAVE));
++		break;
++	case 0x80000001:
++		if (nested)
++			entry->ecx |= (1 << 2); /* Set SVM bit */
++		break;
+ 	case 0x8000000A:
+ 		entry->eax = 1; /* SVM revision 1 */
+ 		entry->ebx = 8; /* Lets support 8 ASIDs in case we add proper
+ 				   ASID emulation to nested SVM */
+ 		entry->ecx = 0; /* Reserved */
+-		entry->edx = 0; /* Do not support any additional features */
++		entry->edx = 0; /* Per default do not support any
++				   additional features */
++
++		/* Support next_rip if host supports it */
++		if (svm_has(SVM_FEATURE_NRIP))
++			entry->edx |= SVM_FEATURE_NRIP;
++
++		/* Support NPT for the guest if enabled */
++		if (npt_enabled)
++			entry->edx |= SVM_FEATURE_NPT;
+ 
+ 		break;
+ 	}
