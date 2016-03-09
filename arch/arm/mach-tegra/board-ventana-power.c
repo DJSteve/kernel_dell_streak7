@@ -176,8 +176,8 @@ static struct tps6586x_settings sm1_config = {
 #define OFF	0
 
 #if 0
-static struct regulator_init_data sm0_data = REGULATOR_INIT(sm0, 725, 1500, ON, NULL);
-static struct regulator_init_data sm1_data = REGULATOR_INIT(sm1, 725, 1500, ON, &sm1_config);
+static struct regulator_init_data sm0_data = REGULATOR_INIT(sm0, 650, 1700, ON, NULL);
+static struct regulator_init_data sm1_data = REGULATOR_INIT(sm1, 650, 1700, ON, &sm1_config);
 static struct regulator_init_data sm2_data = REGULATOR_INIT(sm2, 3000, 4550, ON, NULL);   
 static struct regulator_init_data ldo0_data = REGULATOR_INIT(ldo0, 1250, 3300, OFF, NULL);  
 static struct regulator_init_data ldo1_data = REGULATOR_INIT(ldo1, 725, 1500, ON, NULL);    
@@ -212,8 +212,8 @@ static struct regulator_init_data ldo9_data = REGULATOR_INIT(ldo9, 1250, 3300, O
 		.driver_data = NULL,					\
 	}
 
-static struct regulator_init_data sm0_data = REGULATOR_INIT(sm0, 650, 1600, ON, NULL);
-static struct regulator_init_data sm1_data = REGULATOR_INIT(sm1, 650, 1600, ON, &sm1_config);
+static struct regulator_init_data sm0_data = REGULATOR_INIT(sm0, 650, 1700, ON, NULL);
+static struct regulator_init_data sm1_data = REGULATOR_INIT(sm1, 650, 1700, ON, &sm1_config);
 
 static struct regulator_init_data ldo0_data = REGULATOR_INIT2(ldo0, 2850, 2850);            
 static struct regulator_init_data ldo1_data = REGULATOR_INIT2(ldo1, 1100, 1100);            

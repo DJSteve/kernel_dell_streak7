@@ -137,7 +137,7 @@ obj-$(CONFIG_FB_JZ4740)		  += jz4740_fb.o
 ifneq ($(CONFIG_ICS),y)
 obj-y                             += tegra/
 else
-obj-y                             += tegra-ics/
+obj-y                             += tegra-jb/
 endif
 
 # Platform or fallback drivers go here

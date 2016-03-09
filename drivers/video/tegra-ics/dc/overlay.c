@@ -40,7 +40,7 @@
 #include "overlay.h"
 
 /* Minimum extra shot for DIDIM if n shot is enabled. */
-#define TEGRA_DC_DIDIM_MIN_SHOT	1
+#define TEGRA_DC_DIDIM_MIN_SHOT1
 
 DEFINE_MUTEX(tegra_flip_lock);
 

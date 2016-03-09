@@ -784,7 +784,7 @@ bool tegra_dc_hdmi_detect_test(struct tegra_dc *dc, unsigned char *edid_ptr)
 
 	err = tegra_edid_get_monspecs_test(hdmi->edid, &specs, edid_ptr);
 	if (err < 0) {
-		dev_err(&dc->ndev->dev, "error reading edid\n");
+		//dev_err(&dc->ndev->dev, "error reading edid\n");
 		goto fail;
 	}
 
@@ -820,7 +820,7 @@ static bool tegra_dc_hdmi_detect(struct tegra_dc *dc)
 
 	err = tegra_edid_get_monspecs(hdmi->edid, &specs);
 	if (err < 0) {
-		dev_err(&dc->ndev->dev, "error reading edid\n");
+		//dev_err(&dc->ndev->dev, "error reading edid\n");
 		goto fail;
 	}
 
