@@ -733,6 +733,9 @@ EXPORT_SYMBOL(skb_copy_and_csum_datagram_iovec);
  *	and you use a different write policy from sock_writeable()
  *	then please supply your own write_space callback.
  */
+#ifdef CONFIG_MACH_SAMSUNG_P5 /* for uevent debug */
+unsigned int dgpoll_err_count = 0;	
+#endif
 unsigned int datagram_poll(struct file *file, struct socket *sock,
 			   poll_table *wait)
 {
@@ -744,7 +747,17 @@ unsigned int datagram_poll(struct file *file, struct socket *sock,
 
 	/* exceptional events? */
 	if (sk->sk_err || !skb_queue_empty(&sk->sk_error_queue))
+#ifdef CONFIG_MACH_SAMSUNG_P5 /* for uevent debug */
+	{
+		if ((sk->sk_protocol == NETLINK_KOBJECT_UEVENT) && (dgpoll_err_count++ == 0))
+			printk("[Uevent debug] %s : \
+				datagram_poll for KOBJECT_UEVENT sk is %p, sk->sk_err is %d\n", 
+				__func__, sk, sk->sk_err);
 		mask |= POLLERR;
+	}
+#else
+		mask |= POLLERR;
+#endif
 	if (sk->sk_shutdown & RCV_SHUTDOWN)
 		mask |= POLLRDHUP;
 	if (sk->sk_shutdown == SHUTDOWN_MASK)

@@ -521,7 +521,10 @@ int inet6_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 	case SIOCDELRT:
 
 		return(ipv6_route_ioctl(net, cmd, (void __user *)arg));
-
+#ifdef CONFIG_MACH_SAMSUNG_P4LTE
+    case SIOCSIFID:
+        return  (addrconf_add_ifid(net, (void __user *) arg));
+#endif
 	case SIOCSIFADDR:
 		return addrconf_add_ifaddr(net, (void __user *) arg);
 	case SIOCDIFADDR:

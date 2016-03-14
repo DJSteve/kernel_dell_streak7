@@ -793,7 +793,9 @@ struct net_device {
 	 * of the interface.
 	 */
 	char			name[IFNAMSIZ];
-
+#ifdef CONFIG_MACH_SAMSUNG_P4LTE
+	char			interface_iden[8];
+#endif
 	struct pm_qos_request_list pm_qos_req;
 
 	/* device name hash chain */
@@ -1005,7 +1007,7 @@ struct net_device {
 	struct timer_list	watchdog_timer;
 
 	/* Number of references to this device */
-	int 	__percpu    	*pcpu_refcnt;
+	int __percpu		*pcpu_refcnt;
 
 	/* delayed register/unregister */
 	struct list_head	todo_list;
@@ -1305,7 +1307,6 @@ static inline void unregister_netdevice(struct net_device *dev)
 	unregister_netdevice_queue(dev, NULL);
 }
 
-extern int     		netdev_refcnt_read(const struct net_device *dev);
 extern void		free_netdev(struct net_device *dev);
 extern void		synchronize_net(void);
 extern int 		register_netdevice_notifier(struct notifier_block *nb);
@@ -2143,8 +2144,6 @@ extern void		dev_load(struct net *net, const char *name);
 extern void		dev_mcast_init(void);
 extern struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
 					       struct rtnl_link_stats64 *storage);
-extern const struct net_device_stats *dev_get_stats2(struct net_device *dev);
-
 extern void		dev_txq_stats_fold(const struct net_device *dev,
 					   struct rtnl_link_stats64 *stats);
 
@@ -2173,6 +2172,8 @@ extern void dev_seq_stop(struct seq_file *seq, void *v);
 
 extern int netdev_class_create_file(struct class_attribute *class_attr);
 extern void netdev_class_remove_file(struct class_attribute *class_attr);
+
+extern struct kobj_ns_type_operations net_ns_type_operations;
 
 extern char *netdev_drivername(const struct net_device *dev, char *buffer, int len);
 

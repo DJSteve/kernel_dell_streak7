@@ -2245,8 +2245,11 @@ EXPORT_SYMBOL(dev_queue_xmit);
 /*=======================================================================
 			Receiver routines
   =======================================================================*/
-
+#ifdef CONFIG_MACH_SAMSUNG_P4LTE
+int netdev_max_backlog __read_mostly = 2000;
+#else
 int netdev_max_backlog __read_mostly = 1000;
+#endif
 int netdev_tstamp_prequeue __read_mostly = 1;
 int netdev_budget __read_mostly = 300;
 int weight_p __read_mostly = 64;            /* old backlog weight */
@@ -5124,8 +5127,8 @@ int init_dummy_netdev(struct net_device *dev)
 
 	/* Note : We dont allocate pcpu_refcnt for dummy devices,
 	 * because users of this 'device' dont need to change
- 	 * its refcount.
- 	*/
+	 * its refcount.
+	 */
 
 	return 0;
 }
@@ -5170,11 +5173,11 @@ EXPORT_SYMBOL(register_netdev);
 
 int netdev_refcnt_read(const struct net_device *dev)
 {
-  int i, refcnt = 0;
+	int i, refcnt = 0;
 
-  for_each_possible_cpu(i)
-    refcnt += *per_cpu_ptr(dev->pcpu_refcnt, i);
-  return refcnt;
+	for_each_possible_cpu(i)
+		refcnt += *per_cpu_ptr(dev->pcpu_refcnt, i);
+	return refcnt;
 }
 EXPORT_SYMBOL(netdev_refcnt_read);
 
@@ -5381,18 +5384,6 @@ struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
 }
 EXPORT_SYMBOL(dev_get_stats);
 
-const struct net_device_stats *dev_get_stats2(struct net_device *dev)
-{
-        const struct net_device_ops *ops = dev->netdev_ops;
-
-        if (ops->ndo_get_stats)
-                return ops->ndo_get_stats(dev);
-
-        dev_txq_stats_fold(dev, &dev->stats);
-        return &dev->stats;
-}
-EXPORT_SYMBOL(dev_get_stats2);
-
 static void netdev_init_one_queue(struct net_device *dev,
 				  struct netdev_queue *queue,
 				  void *_unused)
@@ -5476,11 +5467,11 @@ struct net_device *alloc_netdev_mq(int sizeof_priv, const char *name,
 	dev->padded = (char *)dev - (char *)p;
 
 	dev->pcpu_refcnt = alloc_percpu(int);
- 	if (!dev->pcpu_refcnt)
+	if (!dev->pcpu_refcnt)
 		goto free_rx;
 
-	if (dev_addr_init(dev))
-                goto free_pcpu;
+       if (dev_addr_init(dev))
+               goto free_pcpu;
 
 	dev_mc_init(dev);
 	dev_uc_init(dev);

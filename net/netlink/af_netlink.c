@@ -964,6 +964,10 @@ static inline int netlink_broadcast_deliver(struct sock *sk,
 		sk->sk_data_ready(sk, skb->len);
 		return atomic_read(&sk->sk_rmem_alloc) > sk->sk_rcvbuf;
 	}
+#ifdef CONFIG_MACH_SAMSUNG_P5  /* for uevent debug */
+	printk("[Uevent debug] rmem_alloc is %d, sk_rcvbuf %d, nlk->state is %d\n", 
+		atomic_read(&sk->sk_rmem_alloc), sk->sk_rcvbuf, nlk->state);
+#endif
 	return -1;
 }
 
@@ -1022,16 +1026,34 @@ static inline int do_one_broadcast(struct sock *sk,
 		p->failure = 1;
 		if (nlk->flags & NETLINK_BROADCAST_SEND_ERROR)
 			p->delivery_failure = 1;
-	} else if (p->tx_filter && p->tx_filter(sk, p->skb2, p->tx_data)) {
+#ifdef CONFIG_MACH_SAMSUNG_P5  /* for uevent debug */
+		printk("[Uevent debug] %s : \
+			Clone failed. Notify ALL listeners sk->sk_err is %d, del_failure is %d\n",
+			__func__, sk->sk_err, p->delivery_failure);
+#endif
+	} else if (p->tx_filter && ((val = p->tx_filter(sk, p->skb2, p->tx_data)) != 0)) {
 		kfree_skb(p->skb2);
 		p->skb2 = NULL;
-	} else if (sk_filter(sk, p->skb2)) {
+#ifdef CONFIG_MACH_SAMSUNG_P5 /* for uevent debug */
+		printk("[Uevent debug] %s : tx_filter failed. val is %d, sk->sk_err is %d\n", 
+			__func__, val, sk->sk_err);
+#endif
+	} else if ((val = sk_filter(sk, p->skb2)) != 0) {
 		kfree_skb(p->skb2);
 		p->skb2 = NULL;
+#ifdef CONFIG_MACH_SAMSUNG_P5 /* for uevent debug */
+		printk("[Uevent debug] %s : sk_filter failed. val is %d, sk->sk_err is %d\n", 
+			__func__, val, sk->sk_err);
+#endif
 	} else if ((val = netlink_broadcast_deliver(sk, p->skb2)) < 0) {
 		netlink_overrun(sk);
 		if (nlk->flags & NETLINK_BROADCAST_SEND_ERROR)
 			p->delivery_failure = 1;
+#ifdef CONFIG_MACH_SAMSUNG_P5 /* for uevent debug */
+		printk("[Uevent debug] %s : \
+			netlink_broadcast_deliver failed. val is %d, sk->sk_err is %d, del_failure is %d\n", 
+			__func__, val, sk->sk_err, p->delivery_failure);
+#endif
 	} else {
 		p->congested |= val;
 		p->delivered = 1;

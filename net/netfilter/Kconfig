@@ -867,7 +867,8 @@ config NETFILTER_XT_MATCH_PKTTYPE
 
 config NETFILTER_XT_MATCH_QTAGUID
 	bool '"quota, tag, owner" match and stats support'
-        select NETFILTER_XT_MATCH_SOCKET
+        depends on NETFILTER_XT_MATCH_SOCKET
+	depends on NETFILTER_XT_MATCH_OWNER=n
 	help
 	  This option replaces the `owner' match. In addition to matching
 	  on uid, it keeps stats based on a tag assigned to a socket.
@@ -963,11 +964,11 @@ config NETFILTER_XT_MATCH_SCTP
 
 config NETFILTER_XT_MATCH_SOCKET
 	tristate '"socket" match support (EXPERIMENTAL)'
-	select EXPERIMENTAL
-	select NETFILTER_TPROXY
-	select NETFILTER_XTABLES
-	select NETFILTER_ADVANCED
-	select NF_CONNTRACK
+	depends on EXPERIMENTAL
+	depends on NETFILTER_TPROXY
+	depends on NETFILTER_XTABLES
+	depends on NETFILTER_ADVANCED
+	depends on !NF_CONNTRACK || NF_CONNTRACK
 	select NF_DEFRAG_IPV4
 	select NF_DEFRAG_IPV6 if IP6_NF_IPTABLES
 	help

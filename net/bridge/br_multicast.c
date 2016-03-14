@@ -486,6 +486,7 @@ out:
 static struct sk_buff *br_multicast_alloc_query(struct net_bridge *br,
 						struct br_ip *addr)
 {
+#ifndef CONFIG_MACH_SAMSUNG_P4LTE
 	switch (addr->proto) {
 	case htons(ETH_P_IP):
 		return br_ip4_multicast_alloc_query(br, addr->u.ip4);
@@ -494,6 +495,7 @@ static struct sk_buff *br_multicast_alloc_query(struct net_bridge *br,
 		return br_ip6_multicast_alloc_query(br, &addr->u.ip6);
 #endif
 	}
+#endif
 	return NULL;
 }
 
@@ -1358,8 +1360,11 @@ static int br_multicast_ipv4_rcv(struct net_bridge *br,
 	if (unlikely(ip_fast_csum((u8 *)iph, iph->ihl)))
 		return -EINVAL;
 
-	if (iph->protocol != IPPROTO_IGMP)
+	if (iph->protocol != IPPROTO_IGMP) {
+		if ((iph->daddr & IGMP_LOCAL_GROUP_MASK) != IGMP_LOCAL_GROUP)
+			BR_INPUT_SKB_CB(skb)->mrouters_only = 1;
 		return 0;
+	}
 
 	len = ntohs(iph->tot_len);
 	if (skb->len < len || len < ip_hdrlen(skb))
@@ -1403,7 +1408,7 @@ static int br_multicast_ipv4_rcv(struct net_bridge *br,
 	switch (ih->type) {
 	case IGMP_HOST_MEMBERSHIP_REPORT:
 	case IGMPV2_HOST_MEMBERSHIP_REPORT:
-		BR_INPUT_SKB_CB(skb2)->mrouters_only = 1;
+		BR_INPUT_SKB_CB(skb)->mrouters_only = 1;
 		err = br_ip4_multicast_add_group(br, port, ih->group);
 		break;
 	case IGMPV3_HOST_MEMBERSHIP_REPORT:

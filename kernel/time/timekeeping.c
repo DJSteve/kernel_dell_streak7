@@ -841,6 +841,29 @@ void getboottime(struct timespec *ts)
 }
 EXPORT_SYMBOL_GPL(getboottime);
 
+void get_monotonic_boottime(struct timespec *ts)
+{
+        struct timespec tomono, sleep;
+        unsigned int seq;
+        s64 nsecs;
+
+        WARN_ON(timekeeping_suspended);
+
+        do {
+                seq = read_seqbegin(&xtime_lock);
+                *ts = xtime;
+                tomono = wall_to_monotonic;
+                sleep = total_sleep_time;
+                nsecs = timekeeping_get_ns();
+
+        } while (read_seqretry(&xtime_lock, seq));
+
+        set_normalized_timespec(ts, ts->tv_sec + tomono.tv_sec + sleep.tv_sec,
+                        ts->tv_nsec + tomono.tv_nsec + sleep.tv_nsec + nsecs);
+}
+EXPORT_SYMBOL_GPL(get_monotonic_boottime);
+
+
 /**
  * monotonic_to_bootbased - Convert the monotonic time to boot based.
  * @ts:		pointer to the timespec to be converted

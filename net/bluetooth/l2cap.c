@@ -70,6 +70,13 @@ static struct bt_sock_list l2cap_sk_list = {
 	.lock = __RW_LOCK_UNLOCKED(l2cap_sk_list.lock)
 };
 
+// BEGIN SS_BLUEZ_BT +kjh 2011.06.23 : 
+// workaround for a2dp chopping in multi connection.
+static struct l2cap_conn *av_conn = NULL;
+static struct l2cap_conn *hid_conn = NULL;
+static struct l2cap_conn *rfc_conn = NULL;
+// END SS_BLUEZ_BT
+
 static void l2cap_busy_work(struct work_struct *work);
 
 static void __l2cap_sock_close(struct sock *sk, int reason);
@@ -223,6 +230,37 @@ static void __l2cap_chan_add(struct l2cap_conn *conn, struct sock *sk, struct so
 	BT_DBG("conn %p, psm 0x%2.2x, dcid 0x%4.4x", conn,
 			l2cap_pi(sk)->psm, l2cap_pi(sk)->dcid);
 
+// BEGIN SS_BLUEZ_BT +kjh 2011.06.23 : 
+// workaround for a2dp chopping in multi connection.
+// todo : now, we can't check obex properly.
+    switch (l2cap_pi(sk)->psm) {
+    case 0x03:
+        rfc_conn = conn;
+
+        if (av_conn != NULL && rfc_conn == av_conn)
+            rfc_conn = NULL;
+        break;
+    case 0x11:
+        hid_conn = conn;
+        break;
+    case 0x17:
+        av_conn = conn;
+        if (rfc_conn != NULL && rfc_conn == av_conn)
+        rfc_conn = NULL;
+        break;
+    default:
+    break;
+    }
+
+    if (av_conn != NULL && (hid_conn != NULL || rfc_conn != NULL)) {
+        hci_conn_set_encrypt(av_conn->hcon, 0x00);
+        hci_conn_switch_role(av_conn->hcon, 0x00);
+        hci_conn_set_encrypt(av_conn->hcon, 0x01);
+        hci_conn_change_policy(av_conn->hcon, 0x04);
+        av_conn = NULL;
+    }
+// END SS_BLUEZ_BT
+
 	conn->disc_reason = 0x13;
 
 	l2cap_pi(sk)->conn = conn;
@@ -263,6 +301,32 @@ static void l2cap_chan_del(struct sock *sk, int err)
 		/* Unlink from channel list */
 		l2cap_chan_unlink(&conn->chan_list, sk);
 		l2cap_pi(sk)->conn = NULL;
+		
+// BEGIN SS_BLUEZ_BT +kjh 2011.06.23 : 
+// workaround for a2dp chopping in multi connection.
+        switch (l2cap_pi(sk)->psm) {
+        case 0x03:
+            rfc_conn = NULL;
+            break;
+        case 0x11:
+            hid_conn = NULL;
+            break;
+        case 0x17:
+            av_conn = NULL;
+            break;
+        default:
+            break;
+        }
+// END SS_BLUEZ_BT
+
+// BEGIN SS_BLUEZ_BT +kjh 2011.03.16 : 
+// It takes long time to disconnect incoming ACL from local device. (40s) 
+// This is side effect of Google's workaround.
+// If you check "hci_conn_put", you can find timeo val changed.
+		if(conn->hcon) 
+			conn->hcon->out = 1;
+// END SS_BLUEZ_BT
+
 		hci_conn_put(conn->hcon);
 	}
 
@@ -625,6 +689,24 @@ static void l2cap_conn_ready(struct l2cap_conn *conn)
 
 	read_lock(&l->lock);
 
+// BEGIN SS_BLUEZ_BT +kjh 2011.06.18 : 
+// This is SBH650 issue. and this is only workaround
+// We don not send info request at this time, somtimes SBH650 will send disconnect  
+	if (!conn->hcon->out && !(conn->info_state & L2CAP_INFO_FEAT_MASK_REQ_DONE)) {
+		struct l2cap_info_req req;
+		req.type = cpu_to_le16(L2CAP_IT_FEAT_MASK);
+
+		conn->info_state |= L2CAP_INFO_FEAT_MASK_REQ_SENT;
+		conn->info_ident = l2cap_get_ident(conn);
+
+		mod_timer(&conn->info_timer, jiffies +
+					msecs_to_jiffies(L2CAP_INFO_TIMEOUT));
+
+		l2cap_send_cmd(conn, conn->info_ident,
+					L2CAP_INFO_REQ, sizeof(req), &req);
+	}
+// END SS_BLUEZ_BT   
+
 	for (sk = l->head; sk; sk = l2cap_pi(sk)->next_c) {
 		bh_lock_sock(sk);
 
@@ -959,7 +1041,7 @@ static struct sock *l2cap_sock_alloc(struct net *net, struct socket *sock, int p
 	INIT_LIST_HEAD(&bt_sk(sk)->accept_q);
 
 	sk->sk_destruct = l2cap_sock_destruct;
-	sk->sk_sndtimeo = msecs_to_jiffies(L2CAP_CONN_TIMEOUT);
+	sk->sk_sndtimeo = L2CAP_CONN_TIMEOUT;
 
 	sock_reset_flag(sk, SOCK_ZAPPED);
 
@@ -3060,6 +3142,13 @@ sendresp:
 					L2CAP_INFO_REQ, sizeof(info), &info);
 	}
 
+// BEGIN SS_BLUEZ_BT +kjh 2011.03.28 : 
+// this is workaround for windows mobile phone.
+// maybe, conf negotiation has some problem in wm phone.
+// wm phone send first pdu over max size. (we expect 1013, but recved 1014)
+// * this code is mandatory for SIG CERTI 3.0
+// * this code is only for Honeycomb. Gingerbread doesn't have this part.
+/*
 	if (sk && !(l2cap_pi(sk)->conf_state & L2CAP_CONF_REQ_SENT) &&
 				result == L2CAP_CR_SUCCESS) {
 		u8 buf[128];
@@ -3068,6 +3157,8 @@ sendresp:
 					l2cap_build_conf_req(sk, buf), buf);
 		l2cap_pi(sk)->num_conf_req++;
 	}
+*/
+// END SS_BLUEZ_BT
 
 	return 0;
 }
@@ -3211,6 +3302,12 @@ static inline int l2cap_config_req(struct l2cap_conn *conn, struct l2cap_cmd_hdr
 
 	if (!(l2cap_pi(sk)->conf_state & L2CAP_CONF_REQ_SENT)) {
 		u8 buf[64];
+
+// BEGIN SS_BLUEZ_BT +kjh 2011.03.21 : 
+// Bluetooth: Update conf_state before send config_req out
+// Update conf_state with L2CAP_CONF_REQ_SENT before send config_req out in l2cap_config_req().
+		l2cap_pi(sk)->conf_state |= L2CAP_CONF_REQ_SENT;
+// END SS_BLUEZ_BT		
 		l2cap_send_cmd(conn, l2cap_get_ident(conn), L2CAP_CONF_REQ,
 					l2cap_build_conf_req(sk, buf), buf);
 		l2cap_pi(sk)->num_conf_req++;

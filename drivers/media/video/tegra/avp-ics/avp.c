@@ -1011,7 +1011,7 @@ static int avp_init(struct tegra_avp_info *avp)
 	}
 	pr_info("%s: Using nvmem= carveout at %lx to load AVP kernel\n",
 		__func__, (unsigned long)avp->kernel_phys);
-	sprintf(fw_file, "nvrm_avp_%08lx.bin", avp->kernel_phys);
+	sprintf(fw_file, "nvrm_avp_%08lx.bin", (unsigned long)avp->kernel_phys);
 	avp->reset_addr = avp->kernel_phys;
 	avp->kernel_data = ioremap(avp->kernel_phys, SZ_1M);
 #endif
@@ -1172,9 +1172,9 @@ static int _load_lib(struct tegra_avp_info *avp, struct tegra_avp_lib *lib,
 	}
 
 	lib_phys = nvmap_pin(avp->nvmap_libs, lib_handle);
-	if (IS_ERR_OR_NULL((void *)lib_phys)) {
+	if (IS_ERR_VALUE((void *)lib_phys)) {
 		pr_err("avp_lib: can't nvmap pin for lib '%s'\n", lib->name);
-		ret = PTR_ERR(lib_handle);
+		ret = lib_phys;
 		goto err_nvmap_pin;
 	}
 
@@ -1636,9 +1636,9 @@ static int tegra_avp_probe(struct platform_device *pdev)
 
 		avp->kernel_phys =
 			nvmap_pin(avp->nvmap_drv, avp->kernel_handle);
-		if (IS_ERR_OR_NULL((void *)avp->kernel_phys)) {
+		if (IS_ERR_VALUE((void *)avp->kernel_phys)) {
 			pr_err("%s: cannot pin kernel handle\n", __func__);
-			ret = PTR_ERR((void *)avp->kernel_phys);
+			ret = avp->kernel_phys;
 			goto err_nvmap_pin;
 		}
 
@@ -1664,9 +1664,9 @@ static int tegra_avp_probe(struct platform_device *pdev)
 
 		avp->kernel_phys = nvmap_pin(avp->nvmap_drv,
 					avp->kernel_handle);
-		if (IS_ERR_OR_NULL((void *)avp->kernel_phys)) {
+		if (IS_ERR_VALUE(avp->kernel_phys)) {
 			pr_err("%s: cannot pin kernel handle\n", __func__);
-			ret = PTR_ERR((void *)avp->kernel_phys);
+			ret = avp->kernel_phys;
 			goto err_nvmap_pin;
 		}
 
@@ -1693,9 +1693,9 @@ static int tegra_avp_probe(struct platform_device *pdev)
 	}
 	avp->iram_backup_phys = nvmap_pin(avp->nvmap_drv,
 					  avp->iram_backup_handle);
-	if (IS_ERR_OR_NULL((void *)avp->iram_backup_phys)) {
+	if (IS_ERR_VALUE(avp->iram_backup_phys)) {
 		pr_err("%s: cannot pin iram backup handle\n", __func__);
-		ret = PTR_ERR((void *)avp->iram_backup_phys);
+		ret = avp->iram_backup_phys;
 		goto err_iram_nvmap_pin;
 	}
 

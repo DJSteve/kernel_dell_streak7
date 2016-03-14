@@ -81,6 +81,7 @@
 
 #include <linux/crypto.h>
 #include <linux/scatterlist.h>
+#include <linux/inetdevice.h>
 
 int sysctl_tcp_tw_reuse __read_mostly;
 int sysctl_tcp_low_latency __read_mostly;
@@ -1621,6 +1622,9 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	struct tcphdr *th;
 	struct sock *sk;
 	int ret;
+#ifdef CONFIG_MACH_SAMSUNG_P4LTE
+	struct in_device *in_dev;
+#endif
 	struct net *net = dev_net(skb->dev);
 
 	if (skb->pkt_type != PACKET_HOST)
@@ -1712,7 +1716,23 @@ no_tcp_socket:
 bad_packet:
 		TCP_INC_STATS_BH(net, TCP_MIB_INERRS);
 	} else {
+#ifdef CONFIG_MACH_SAMSUNG_P4LTE
+		in_dev = in_dev_get(skb->dev);
+
+		if(in_dev)
+		{
+		    if(!IN_DEV_FORWARD(in_dev))
+		    {
 		tcp_v4_send_reset(NULL, skb);
+	}
+
+		    in_dev_put(in_dev);
+		}
+		else
+		    tcp_v4_send_reset(NULL, skb);
+#else
+		    tcp_v4_send_reset(NULL, skb);
+#endif
 	}
 
 discard_it:
