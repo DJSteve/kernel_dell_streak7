@@ -317,10 +317,10 @@ void tegra_ext_control(struct snd_soc_codec *codec, int new_con)
 	else
 		snd_soc_dapm_disable_pin(codec, "Int Spk");
 
-	if (new_con & TEGRA_INT_MIC)
+//	if (new_con & TEGRA_INT_MIC)
 		snd_soc_dapm_enable_pin(codec, "Int Mic");
-	else
-		snd_soc_dapm_disable_pin(codec, "Int Mic");
+//	else
+//		snd_soc_dapm_disable_pin(codec, "Int Mic");
 
 	if (new_con & TEGRA_EXT_MIC)
 		snd_soc_dapm_enable_pin(codec, "Ext Mic");
@@ -412,7 +412,7 @@ static int tegra_dapm_event_int_spk(struct snd_soc_dapm_widget* w,
 static int tegra_dapm_event_int_mic(struct snd_soc_dapm_widget* w,
 				    struct snd_kcontrol* k, int event)
 {
-#if 1
+//#if 1
 	int CtrlReg = 0;
 	struct snd_soc_codec *codec = w->codec;
 	ASOC_FUNCTION("");
@@ -427,12 +427,12 @@ static int tegra_dapm_event_int_mic(struct snd_soc_dapm_widget* w,
 
 		snd_soc_write(codec, WM8903_AUDIO_INTERFACE_0, CtrlReg);
 	}
-#else
+/*#else
 	if (s_wired_jack_conf._wired_jack_conf.en_mic_int != -1)
 		gpio_set_value_cansleep(s_wired_jack_conf._wired_jack_conf.en_mic_int,
 			SND_SOC_DAPM_EVENT_ON(event) ? 1 : 0);
 #endif
-
+*/
 	return 0;
 }
 
@@ -497,7 +497,6 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"IN1R", NULL, "Int Mic"},
 	{"ADCR", NULL, "Int Mic"},
 
-	
 	{"IN2L", NULL, "Ext Mic"},
 	{"ADCL", NULL, "Ext Mic"},
 

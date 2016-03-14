@@ -133,7 +133,7 @@ extern int dhd_os_check_if_up(void *dhdp);
 extern void *bcmsdh_get_drvdata(void);
 
 extern bool ap_fw_loaded;
-#ifdef CUSTOMER_HW2
+#if defined(CUSTOMER_HW2) || defined(CUSTOMER_HW_SAMSUNG)
 extern char iface_name[IFNAMSIZ];
 #endif
 
@@ -375,7 +375,7 @@ int wl_android_wifi_on(struct net_device *dev)
 {
 	int ret = 0;
 
-	printf("%s in\n", __FUNCTION__);
+	printk("%s in\n", __FUNCTION__);
 	if (!dev) {
 		DHD_ERROR(("%s: dev is null\n", __FUNCTION__));
 		return -EINVAL;
@@ -402,7 +402,7 @@ int wl_android_wifi_off(struct net_device *dev)
 {
 	int ret = 0;
 
-	printf("%s in\n", __FUNCTION__);
+	printk("%s in\n", __FUNCTION__);
 	if (!dev) {
 		DHD_TRACE(("%s: dev is null\n", __FUNCTION__));
 		return -EINVAL;
@@ -625,12 +625,16 @@ int wl_android_init(void)
 #ifdef ENABLE_INSMOD_NO_FW_LOAD
 	dhd_download_fw_on_driverload = FALSE;
 #endif /* ENABLE_INSMOD_NO_FW_LOAD */
-#ifdef CUSTOMER_HW2
+#if defined(CUSTOMER_HW2) || defined(CUSTOMER_HW_SAMSUNG)
 	if (!iface_name[0]) {
 		memset(iface_name, 0, IFNAMSIZ);
+#if !defined(CONFIG_MACH_SAMSUNG_VARIATION_TEGRA)
 		bcm_strncpy_s(iface_name, IFNAMSIZ, "wlan", IFNAMSIZ);
+#else
+		bcm_strncpy_s(iface_name, IFNAMSIZ, "eth", IFNAMSIZ);
+#endif
 	}
-#endif /* CUSTOMER_HW2 */
+#endif /* CUSTOMER_HW2 || CUSTOMER_HW_SAMSUNG */
 	return ret;
 }
 
@@ -645,7 +649,6 @@ void wl_android_post_init(void)
 {
 	if (!dhd_download_fw_on_driverload) {
 		/* Call customer gpio to turn off power with WL_REG_ON signal */
-		sdioh_stop(NULL);
 		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_OFF);
 		g_wifi_on = 0;
 	}
@@ -781,7 +784,11 @@ static int wifi_probe(struct platform_device *pdev)
 			IORESOURCE_IRQ, "bcm4329_wlan_irq");
 	wifi_control_data = wifi_ctrl;
 
+#ifdef POWER_ON_DELAY_4330
+        wifi_set_power(1, 200); /* Power On */
+#else
 	wifi_set_power(1, 0);	/* Power On */
+#endif
 	wifi_set_carddetect(1);	/* CardDetect (0->1) */
 
 	up(&wifi_control_sem);

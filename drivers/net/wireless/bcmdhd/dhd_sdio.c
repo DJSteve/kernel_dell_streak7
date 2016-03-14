@@ -345,7 +345,7 @@ static const uint firstread = DHD_FIRSTREAD;
 #define HDATLEN (firstread - (SDPCM_HDRLEN))
 
 /* Retry count for register access failures */
-static const uint retry_limit = 20;
+static const uint retry_limit = 2;
 
 /* Force even SD lengths (some host controllers mess up on odd bytes) */
 static bool forcealign;
@@ -398,8 +398,6 @@ do { \
 	do { \
 		regvar = R_REG(bus->dhd->osh, regaddr); \
 	} while (bcmsdh_regfail(bus->sdh) && (++retryvar <= retry_limit)); \
-	if(retryvar > 1)  \
-		DHD_ERROR(("%s: regvar[ %d ], retryvar[ %d ], regfails[ %d ], bcmsdh_regfail[ %d ] \n",__FUNCTION__,regvar, retryvar ,bus->regfails, bcmsdh_regfail(bus->sdh))); \
 	if (retryvar) { \
 		bus->regfails += (retryvar-1); \
 		if (retryvar > retry_limit) { \
@@ -509,8 +507,6 @@ static int dhdsdio_download_code_array(dhd_bus_t *bus);
 extern uint32 dhd_get_htsf(void *dhd, int ifidx);
 #endif /* WLMEDIA_HTSF */
 
-extern int chip_is_b1;
-
 static void
 dhd_dongle_setmemsize(struct dhd_bus *bus, int mem_size)
 {
@@ -543,6 +539,8 @@ dhdsdio_set_siaddr_window(dhd_bus_t *bus, uint32 address)
 static int
 dhdsdio_htclk(dhd_bus_t *bus, bool on, bool pendok)
 {
+#define HT_AVAIL_ERROR_MAX	10
+	static int ht_avail_error = 0;
 	int err;
 	uint8 clkctl, clkreq, devctl;
 	bcmsdh_info_t *sdh;
@@ -555,18 +553,22 @@ dhdsdio_htclk(dhd_bus_t *bus, bool on, bool pendok)
 	clkctl = 0;
 	sdh = bus->sdh;
 
-
 	if (on) {
 		/* Request HT Avail */
 		clkreq = bus->alp_only ? SBSDIO_ALP_AVAIL_REQ : SBSDIO_HT_AVAIL_REQ;
 
-
-
-
 		bcmsdh_cfg_write(sdh, SDIO_FUNC_1, SBSDIO_FUNC1_CHIPCLKCSR, clkreq, &err);
 		if (err) {
-			DHD_ERROR(("%s: HT Avail request error: %d\n", __FUNCTION__, err));
+			ht_avail_error++;
+			if (ht_avail_error < HT_AVAIL_ERROR_MAX) {
+				DHD_ERROR(("%s: HT Avail request error: %d\n", __FUNCTION__, err));
+			} else {
+				if (ht_avail_error == HT_AVAIL_ERROR_MAX)
+					dhd_os_send_hang_message(bus->dhd);
+			}
 			return BCME_ERROR;
+		} else {
+			ht_avail_error = 0;
 		}
 
 		if (pendok &&
@@ -1000,6 +1002,14 @@ dhdsdio_txpkt(dhd_bus_t *bus, void *pkt, uint chan, bool free_pkt)
 			ASSERT(((uintptr)frame % DHD_SDALIGN) == 0);
 			pad1 = 0;
 		} else {
+#ifdef CUSTOMER_HW_SAMSUNG
+                        /* Adjust pad value to fix firmware crash problems
+                         * because of odd start address of the frame
+                         * (CSP#455126)
+                         */
+                        if ((int)frame & 1)
+                                pad1--;
+#endif
 			PKTPUSH(osh, pkt, pad1);
 			frame = (uint8*)PKTDATA(osh, pkt);
 
@@ -2215,7 +2225,7 @@ dhdsdio_doiovar(dhd_bus_t *bus, const bcm_iovar_t *vi, uint32 actionid, const ch
 	int32 int_val = 0;
 	bool bool_val = 0;
 
-	DHD_ERROR(("%s: Enter, action %d name %s params %p plen %d arg %p len %d val_size %d\n",
+	DHD_TRACE(("%s: Enter, action %d name %s params %p plen %d arg %p len %d val_size %d\n",
 	           __FUNCTION__, actionid, name, params, plen, arg, len, val_size));
 
 	if ((bcmerror = bcm_iovar_lencheck(vi, arg, len, IOV_ISSET(actionid))) != 0)
@@ -5354,7 +5364,7 @@ dhdsdio_probe(uint16 venid, uint16 devid, uint16 bus_no, uint16 slot,
 	bus->usebufpool = FALSE; /* Use bufpool if allocated, else use locally malloced rxbuf */
 
 	/* attach the common module */
-	if (!(cmn = dhd_common_init(bus->cl_devid, osh))) {
+	if (!(cmn = dhd_common_init(osh))) {
 		DHD_ERROR(("%s: dhd_common_init failed\n", __FUNCTION__));
 		goto fail;
 	}
@@ -6101,7 +6111,6 @@ static int
 _dhdsdio_download_firmware(struct dhd_bus *bus)
 {
 	int bcmerror = -1;
-	char *p;
 
 	bool embed = FALSE;	/* download embedded firmware */
 	bool dlok = FALSE;	/* download firmware succeeded */
@@ -6123,25 +6132,6 @@ _dhdsdio_download_firmware(struct dhd_bus *bus)
 
 	/* External image takes precedence if specified */
 	if ((bus->fw_path != NULL) && (bus->fw_path[0] != '\0')) {
-
-		/* replace bcm43xx with bcm4330 or bcm4329 */
-		if ((p = strstr(bus->fw_path, "bcm43xx"))) {
-			if (bus->cl_devid == 0x4329) {
-				*(p + 5)='2';
-				*(p + 6)='9';
-			}
-			if (bus->cl_devid == 0x4330) {
-				*(p + 5)='3';
-				*(p + 6)='0';
-			}
-		}
-
-		if(chip_is_b1){
-			strcpy(bus->fw_path, "/system/vendor/firmware/bcm4330/fw_bcmdhd_b1.bin");
-		}
-
-		printf("%s: fw_path = %s, nv_path=%s\n", __FUNCTION__, bus->fw_path, bus->nv_path);
-
 		if (dhdsdio_download_code_file(bus, bus->fw_path)) {
 			DHD_ERROR(("%s: dongle image file download failed\n", __FUNCTION__));
 #ifdef BCMEMBEDIMAGE
@@ -6254,12 +6244,6 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 			/* Force flow control as protection when stop come before ifconfig_down */
 			dhd_txflowcontrol(bus->dhd, ALL_INTERFACES, ON);
 #endif /* !defined(IGNORE_ETH0_DOWN) */
-
-#if !defined(OOB_INTR_ONLY)
-			/* to avoid supurious client interrupt during stop process */
-			bcmsdh_stop(bus->sdh);
-#endif /* !defined(OOB_INTR_ONLY) */
-
 			/* Expect app to have torn down any connection before calling */
 			/* Stop the bus, disable F2 */
 			dhd_bus_stop(bus, FALSE);
@@ -6350,7 +6334,23 @@ uint dhd_bus_chip_id(dhd_pub_t *dhdp)
 {
 	dhd_bus_t *bus = dhdp->bus;
 
-	return  bus->sih->chip;
+	return bus->sih->chip;
+}
+
+/* Get Chip Rev ID version */
+uint dhd_bus_chiprev_id(dhd_pub_t *dhdp)
+{
+	dhd_bus_t *bus = dhdp->bus;
+
+	return bus->sih->chiprev;
+}
+
+/* Get Chip Pkg ID version */
+uint dhd_bus_chippkg_id(dhd_pub_t *dhdp)
+{
+	dhd_bus_t *bus = dhdp->bus;
+
+	return bus->sih->chippkg;
 }
 
 int

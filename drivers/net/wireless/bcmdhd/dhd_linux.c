@@ -167,6 +167,12 @@ extern int dhd_get_dtim_skip(dhd_pub_t *dhd);
 extern void dhd_pktfilter_offload_set(dhd_pub_t * dhd, char *arg);
 extern void dhd_pktfilter_offload_enable(dhd_pub_t * dhd, char *arg, int enable, int master_mode);
 #endif
+#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+#ifdef RDWR_MACADDR
+extern int dhd_check_rdwr_macaddr(struct dhd_info *dhd, dhd_pub_t *dhdp, struct ether_addr *mac);
+extern int dhd_write_rdwr_macaddr(struct ether_addr *mac);
+#endif
+#endif
 
 /* Interface control information */
 typedef struct dhd_if {
@@ -295,10 +301,16 @@ typedef struct dhd_info {
 char firmware_path[MOD_PARAM_PATHLEN];
 char nvram_path[MOD_PARAM_PATHLEN];
 
+/* load firmware and/or nvram values from the filesystem */
+module_param_string(firmware_path, firmware_path, MOD_PARAM_PATHLEN, 0660);
+module_param_string(nvram_path, nvram_path, MOD_PARAM_PATHLEN, 0);
+
+char info_string[MOD_PARAM_INFOLEN];
+module_param_string(info_string, info_string, MOD_PARAM_INFOLEN, 0444);
+
 int op_mode = 0;
 module_param(op_mode, int, 0644);
 extern int wl_control_wl_start(struct net_device *dev);
-extern int net_os_send_hang_message(struct net_device *dev);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
 struct semaphore dhd_registration_sem;
 #define DHD_REGISTRATION_TIMEOUT  12000  /* msec : allowed time to finished dhd registration */
@@ -310,10 +322,6 @@ module_param(dhd_sysioc, uint, 0);
 
 /* Error bits */
 module_param(dhd_msg_level, int, 0);
-
-/* load firmware and/or nvram values from the filesystem */
-module_param_string(firmware_path, firmware_path, MOD_PARAM_PATHLEN, 0660);
-module_param_string(nvram_path, nvram_path, MOD_PARAM_PATHLEN, 0);
 
 /* Watchdog interval */
 uint dhd_watchdog_ms = 10;
@@ -347,14 +355,13 @@ module_param(dhd_master_mode, uint, 0);
 
 #ifdef DHDTHREAD
 /* Watchdog thread priority, -1 to use kernel timer */
-int dhd_watchdog_prio = 97;
+int dhd_watchdog_prio = 0;
 module_param(dhd_watchdog_prio, int, 0);
 
 /* DPC thread priority, -1 to use tasklet */
-int dhd_dpc_prio = 98;
+int dhd_dpc_prio = 1;
 module_param(dhd_dpc_prio, int, 0);
 
-/* DPC thread priority, -1 to use tasklet */
 extern int dhd_dongle_memsize;
 module_param(dhd_dongle_memsize, int, 0);
 #endif /* DHDTHREAD */
@@ -455,7 +462,6 @@ static void dhd_dump_htsfhisto(histo_t *his, char *s);
 int dhd_monitor_init(void *dhd_pub);
 int dhd_monitor_uninit(void);
 
-
 #if defined(WL_WIRELESS_EXT)
 struct iw_statistics *dhd_get_wireless_stats(struct net_device *dev);
 #endif /* defined(WL_WIRELESS_EXT) */
@@ -527,11 +533,15 @@ static void dhd_set_packet_filter(int value, dhd_pub_t *dhd)
 
 static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {
+#ifndef CUSTOMER_HW_SAMSUNG
 	int power_mode = PM_MAX;
+#endif
 	/* wl_pkt_filter_enable_t	enable_parm; */
 	char iovbuf[32];
 	int bcn_li_dtim = 3;
+#ifndef CUSTOMER_HW_SAMSUNG
 	uint roamvar = 1;
+#endif
 
 	DHD_TRACE(("%s: enter, value = %d in_suspend=%d\n",
 		__FUNCTION__, value, dhd->in_suspend));
@@ -543,8 +553,10 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			/* Kernel suspended */
 			DHD_ERROR(("%s: force extra Suspend setting \n", __FUNCTION__));
 
+#ifndef CUSTOMER_HW_SAMSUNG
 			dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
 			                 sizeof(power_mode), TRUE, 0);
+#endif
 
 			/* Enable packet filter, only allow unicast packet to send up */
 			dhd_set_packet_filter(1, dhd);
@@ -558,18 +570,22 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				4, iovbuf, sizeof(iovbuf));
 			dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
 
+#ifndef CUSTOMER_HW_SAMSUNG
 			/* Disable firmware roaming during suspend */
 			bcm_mkiovar("roam_off", (char *)&roamvar, 4,
 				iovbuf, sizeof(iovbuf));
 			dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+#endif
 		} else {
 
 			/* Kernel resumed  */
 			DHD_TRACE(("%s: Remove extra suspend setting \n", __FUNCTION__));
 
+#ifndef CUSTOMER_HW_SAMSUNG
 			power_mode = PM_FAST;
 			dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
 			                 sizeof(power_mode), TRUE, 0);
+#endif
 
 			/* disable pkt filter */
 			dhd_set_packet_filter(0, dhd);
@@ -579,10 +595,12 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				4, iovbuf, sizeof(iovbuf));
 
 			dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+#ifndef CUSTOMER_HW_SAMSUNG
 			roamvar = dhd_roam_disable;
 			bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf,
 				sizeof(iovbuf));
 			dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+#endif
 		}
 	}
 	dhd_suspend_unlock(dhd);
@@ -645,7 +663,7 @@ dhd_timeout_start(dhd_timeout_t *tmo, uint usec)
 	tmo->limit = usec;
 	tmo->increment = 0;
 	tmo->elapsed = 0;
-	tmo->tick = 1000000 / HZ;
+	tmo->tick = jiffies_to_usecs(1);
 }
 
 int
@@ -905,7 +923,11 @@ _dhd_set_multicast_list(dhd_info_t *dhd, int ifidx)
 	}
 }
 
+#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+int
+#else
 static int
+#endif
 _dhd_set_mac_address(dhd_info_t *dhd, int ifidx, struct ether_addr *addr)
 {
 	char buf[32];
@@ -1691,7 +1713,7 @@ dhd_watchdog_thread(void *data)
 				/* Reschedule the watchdog */
 				if (dhd->wd_timer_valid)
 					mod_timer(&dhd->timer,
-					jiffies + dhd_watchdog_ms * HZ / 1000);
+					jiffies + msecs_to_jiffies(dhd_watchdog_ms));
 				dhd_os_spin_unlock(&dhd->pub, flags);
 			}
 			dhd_os_sdunlock(&dhd->pub);
@@ -1732,7 +1754,7 @@ static void dhd_watchdog(ulong data)
 
 	/* Reschedule the watchdog */
 	if (dhd->wd_timer_valid)
-		mod_timer(&dhd->timer, jiffies + dhd_watchdog_ms * HZ / 1000);
+		mod_timer(&dhd->timer, jiffies + msecs_to_jiffies(dhd_watchdog_ms));
 	dhd_os_spin_unlock(&dhd->pub, flags);
 	dhd_os_sdunlock(&dhd->pub);
 	DHD_OS_WAKE_UNLOCK(&dhd->pub);
@@ -2146,12 +2168,10 @@ dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 		goto done;
 	}
 
-#if 0 // Disable Permission Checking for Wi-Fi RF Test Program
 	if (!capable(CAP_NET_ADMIN)) {
 		bcmerror = -BCME_EPERM;
 		goto done;
 	}
-#endif
 
 	/* check for local dhd ioctl and handle it */
 	if (driver == DHD_IOCTL_MAGIC) {
@@ -2648,17 +2668,8 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 			strcat(net->name, "%d");
 	}
 
-	if (dhd_add_if(dhd, 0, (void *)net, net->name, NULL, 0, 0) == DHD_BAD_IF)
-		goto fail;
-	dhd_state |= DHD_ATTACH_STATE_ADD_IF;
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 31))
-	net->open = NULL;
-#else
-	net->netdev_ops = NULL;
-#endif
-
 	sema_init(&dhd->proto_sem, 1);
+	sema_init(&dhd->sdsem, 1);
 
 #ifdef PROP_TXSTATUS
 	spin_lock_init(&dhd->wlfc_spinlock);
@@ -2673,6 +2684,17 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 	spin_lock_init(&dhd->sdlock);
 	spin_lock_init(&dhd->txqlock);
 	spin_lock_init(&dhd->dhd_lock);
+
+
+	if (dhd_add_if(dhd, 0, (void *)net, net->name, NULL, 0, 0) == DHD_BAD_IF)
+		goto fail;
+	dhd_state |= DHD_ATTACH_STATE_ADD_IF;
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 31))
+	net->open = NULL;
+#else
+	net->netdev_ops = NULL;
+#endif
 
 	/* Initialize Wakelock stuff */
 	spin_lock_init(&dhd->wakelock_spinlock);
@@ -2726,7 +2748,6 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 
 #ifdef DHDTHREAD
 	/* Initialize thread based operation and lock */
-	sema_init(&dhd->sdsem, 1);
 	if ((dhd_watchdog_prio >= 0) && (dhd_dpc_prio >= 0)) {
 		dhd->threads_only = TRUE;
 	}
@@ -2903,11 +2924,21 @@ dhd_bus_start(dhd_pub_t *dhdp)
 #ifdef READ_MACADDR
 	dhd_read_macaddr(dhd);
 #endif
+#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+#ifdef RDWR_MACADDR
+	dhd_check_rdwr_macaddr(dhd, &dhd->pub, &dhd->pub.mac);
+#endif
+#endif
 
 	/* Bus is ready, do any protocol initialization */
 	if ((ret = dhd_prot_init(&dhd->pub)) < 0)
 		return ret;
 
+#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+#ifdef RDWR_MACADDR
+	dhd_write_rdwr_macaddr(&dhd->pub.mac);
+#endif
+#endif
 #ifdef WRITE_MACADDR
 	dhd_write_macaddr(dhd->pub.mac.octet);
 #endif
@@ -2987,6 +3018,10 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	char *ptr;
 	uint32 listen_interval = LISTEN_INTERVAL; /* Default Listen Interval in Beacons */
 	uint16 chipID;
+
+#ifdef CUSTOMER_HW_SAMSUNG
+	uint roamvar = 1;
+#endif
 #if defined(SOFTAP)
 	uint dtim = 1;
 #endif
@@ -3135,11 +3170,11 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	}
 #endif /* !defined(WL_ENABLE_P2P_IF) */
 
-	printf("Firmware up: op_mode=%d, "
+	DHD_ERROR(("Firmware up: op_mode=%d, "
 			"Broadcom Dongle Host Driver mac=%.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n",
 			dhd->op_mode,
 			dhd->mac.octet[0], dhd->mac.octet[1], dhd->mac.octet[2],
-			dhd->mac.octet[3], dhd->mac.octet[4], dhd->mac.octet[5]);
+			dhd->mac.octet[3], dhd->mac.octet[4], dhd->mac.octet[5]));
 
 	/* Set Country code  */
 	if (dhd->dhd_cspec.ccode[0] != 0) {
@@ -3153,6 +3188,12 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	bcm_mkiovar("assoc_listen", (char *)&listen_interval, 4, iovbuf, sizeof(iovbuf));
 	if ((ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0)) < 0)
 		DHD_ERROR(("%s assoc_listen failed %d\n", __FUNCTION__, ret));
+
+#ifdef CUSTOMER_HW_SAMSUNG
+/* Disable built-in roaming to allowed ext supplicant to take care of roaming */
+        bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf, sizeof(iovbuf));
+        dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+#endif
 
 	/* Set PowerSave mode */
 	dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode, sizeof(power_mode), TRUE, 0);
@@ -3316,6 +3357,8 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 		bcmstrtok(&ptr, "\n", 0);
 		/* Print fw version info */
 		DHD_ERROR(("Firmware version = %s\n", buf));
+
+		dhd_set_version_info(dhd, buf);
 
 		DHD_BLOG(buf, strlen(buf) + 1);
 		DHD_BLOG(dhd_version, strlen(dhd_version) + 1);
@@ -3936,14 +3979,9 @@ dhd_os_ioctl_resp_wait(dhd_pub_t *pub, uint *condition, bool *pending)
 {
 	dhd_info_t * dhd = (dhd_info_t *)(pub->info);
 	DECLARE_WAITQUEUE(wait, current);
-	int timeout = dhd_ioctl_timeout_msec;
+	int timeout;
 
-	/* Convert timeout in millsecond to jiffies */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
-	timeout = msecs_to_jiffies(timeout);
-#else
-	timeout = timeout * HZ / 1000;
-#endif
+	timeout = msecs_to_jiffies(dhd_ioctl_timeout_msec);
 
 	/* Wait until control frame is available */
 	add_wait_queue(&dhd->ioctl_resp_wait, &wait);
@@ -4009,7 +4047,7 @@ dhd_os_wd_timer(void *bus, uint wdtick)
 	if (wdtick) {
 		dhd_watchdog_ms = (uint)wdtick;
 		/* Re arm the timer, at last watchdog period */
-		mod_timer(&dhd->timer, jiffies + dhd_watchdog_ms * HZ / 1000);
+		mod_timer(&dhd->timer, jiffies + msecs_to_jiffies(dhd_watchdog_ms));
 		dhd->wd_timer_valid = TRUE;
 	}
 	dhd_os_spin_unlock(pub, flags);
@@ -4128,9 +4166,18 @@ dhd_os_sdtxunlock(dhd_pub_t *pub)
 }
 
 #if defined(CONFIG_DHD_USE_STATIC_BUF)
+
+#if defined(CONFIG_MACH_SAMSUNG_VARIATION_TEGRA)
+void *wlan_mem_prealloc(int section, unsigned long size);
+#endif
+
 uint8* dhd_os_prealloc(void *osh, int section, uint size)
 {
+#if !defined(CONFIG_MACH_SAMSUNG_VARIATION_TEGRA)
 	return (uint8*)wl_android_prealloc(section, size);
+#else
+	return (uint8*)wlan_mem_prealloc(section, size);
+#endif
 }
 
 void dhd_os_prefree(void *osh, void *addr, uint size)
@@ -4320,11 +4367,7 @@ void dhd_wait_for_event(dhd_pub_t *dhd, bool *lockvar)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
 	struct dhd_info *dhdinfo =  dhd->info;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
 	int timeout = msecs_to_jiffies(2000);
-#else
-	int timeout = 2 * HZ;
-#endif
 	dhd_os_sdunlock(dhd);
 	wait_event_timeout(dhdinfo->ctrl_wait, (*lockvar == FALSE), timeout);
 	dhd_os_sdlock(dhd);
@@ -4533,28 +4576,55 @@ static void dhd_hang_process(struct work_struct *work)
 #endif
 	}
 }
+#endif
+
+int dhd_os_send_hang_message(dhd_pub_t *dhdp)
+{
+	int ret = 0;
+
+	if (dhdp) {
+		if (!dhdp->hang_was_sent) {
+			dhdp->hang_was_sent = 1;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
+			schedule_work(&dhdp->info->work_hang);
+#endif
+		}
+	}
+	return ret;
+}
 
 int net_os_send_hang_message(struct net_device *dev)
 {
 	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
 	int ret = 0;
 
-	if (dhd) {
-		if (!dhd->pub.hang_was_sent) {
-			dhd->pub.hang_was_sent = 1;
-			schedule_work(&dhd->work_hang);
-		}
-	}
+	if (dhd)
+		ret = dhd_os_send_hang_message(&dhd->pub);
+
 	return ret;
 }
-#endif
 
 void dhd_bus_country_set(struct net_device *dev, wl_country_t *cspec)
 {
 	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
 
-	if (dhd && dhd->pub.up)
+	if (dhd && dhd->pub.up) {
 		memcpy(&dhd->pub.dhd_cspec, cspec, sizeof(wl_country_t));
+#ifdef WL_CFG80211
+		wl_update_wiphybands(NULL);
+#endif
+	}
+}
+
+void dhd_bus_band_set(struct net_device *dev, uint band)
+{
+	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
+
+	if (dhd && dhd->pub.up) {
+#ifdef WL_CFG80211
+		wl_update_wiphybands(NULL);
+#endif
+	}
 }
 
 void dhd_net_if_lock(struct net_device *dev)
@@ -4634,7 +4704,7 @@ int
 dhd_wait_pend8021x(struct net_device *dev)
 {
 	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
-	int timeout = 10 * HZ / 1000;
+	int timeout = msecs_to_jiffies(10);
 	int ntimes = MAX_WAIT_FOR_8021X_TX;
 	int pend = dhd_get_pend_8021x_cnt(dhd);
 
@@ -4854,6 +4924,20 @@ int dhd_os_check_if_up(void *dhdp)
 	if (!pub)
 		return 0;
 	return pub->up;
+}
+
+void dhd_set_version_info(dhd_pub_t *dhdp, char *fw)
+{
+	int i;
+
+	i = snprintf(info_string, sizeof(info_string),
+		"  Driver: %s\n  Firmware: %s ", EPI_VERSION_STR, fw);
+
+	if (!dhdp)
+		return;
+	i = snprintf(&info_string[i], sizeof(info_string) - i,
+		"\n  Chip: %x Rev %x Pkg %x", dhd_bus_chip_id(dhdp),
+		dhd_bus_chiprev_id(dhdp), dhd_bus_chippkg_id(dhdp));
 }
 
 int dhd_ioctl_entry_local(struct net_device *net, wl_ioctl_t *ioc, int cmd)

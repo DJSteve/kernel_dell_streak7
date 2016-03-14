@@ -56,7 +56,7 @@
 struct wm8903_wired_jack_conf s_wired_jack_conf = {
 	._wired_jack_conf.hp_det_n = -1,
 	._wired_jack_conf.dock_det = -1,
-	._wired_jack_conf.en_mic_int = -1,
+	._wired_jack_conf.en_mic_int = 1,
 	._wired_jack_conf.hook_mic_ext = -1,
 	._wired_jack_conf.cdc_irq = -1,
 	._wired_jack_conf.en_spkr = -1,
