@@ -95,7 +95,7 @@ static struct resource ventana_wifi_resources[] = {
 };
 
 static struct platform_device ventana_wifi_device = {
-	.name           = "bcm4329_wlan",
+	.name           = "bcmdhd_wlan",
 	.id             = 1,
 	.num_resources	= ARRAY_SIZE(ventana_wifi_resources),
 	.resource		= ventana_wifi_resources,
@@ -277,6 +277,7 @@ static int ventana_wifi_set_carddetect(int val)
 		pr_warning("%s: Nobody to notify\n", __func__);
 	return 0;
 }
+EXPORT_SYMBOL(ventana_wifi_set_carddetect);
 
 static int ventana_wifi_power(int on)
 {
@@ -292,6 +293,7 @@ static int ventana_wifi_power(int on)
 
 	return 0;
 }
+EXPORT_SYMBOL(ventana_wifi_power);
 
 static int ventana_wifi_reset(int on)
 {
@@ -319,17 +321,12 @@ static int __init ventana_wifi_init(void)
 #endif
 
 	gpio_request(VENTANA_WLAN_PWR, "wlan_power");
-	
-	
-	
+
 	tegra_gpio_enable(VENTANA_WLAN_PWR);
-	
-	
-	
+
 	gpio_direction_output(VENTANA_WLAN_PWR, 0);
-	
-	
-	
+
+	ventana_wifi_power(1);
 
 	gpio_request(VENTANA_WLAN_IRQ, "wlan_irq");
 	tegra_gpio_enable(VENTANA_WLAN_IRQ);
@@ -344,30 +341,10 @@ static int __init ventana_wifi_init(void)
 }
 int __init ventana_sdhci_init(void)
 {
-	
-	
-	
 	gpio_request(tegra_sdhci_platform_data2.cd_gpio, "sdhci2_cd");
 	gpio_request(tegra_sdhci_platform_data2.wp_gpio, "sdhci2_wp");
-	
-	
-	
-
-	
-	
-	
-
 	tegra_gpio_enable(tegra_sdhci_platform_data2.cd_gpio);
 	tegra_gpio_enable(tegra_sdhci_platform_data2.wp_gpio);
-	
-	
-	
-
-	
-	
-	
-	
-	
 
 	platform_device_register(&tegra_sdhci_device3);
 	platform_device_register(&tegra_sdhci_device2);

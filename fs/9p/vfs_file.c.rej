@@ -1,0 +1,10 @@
+--- fs/9p/vfs_file.c
++++ fs/9p/vfs_file.c
+@@ -697,6 +697,7 @@
+ static const struct vm_operations_struct v9fs_file_vm_ops = {
+ 	.fault = filemap_fault,
+ 	.page_mkwrite = v9fs_vm_page_mkwrite,
++	.remap_pages = generic_file_remap_pages,
+ };
+ 
+ 

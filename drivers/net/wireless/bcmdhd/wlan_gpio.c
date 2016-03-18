@@ -36,28 +36,31 @@
 #include <sbchipc.h>
 #include <pcicfg.h>
 
+#define VENTANA_WLAN_PWR        TEGRA_GPIO_PX1
+#define VENTANA_WLAN_IRQ        TEGRA_GPIO_PU5
+
 extern void tegra_sdhci_force_presence_change();
-extern void p3_wlan_gpio_enable();
-extern void p3_wlan_gpio_disable();
+extern void ventana_wifi_set_carddetect(int);
+extern void ventana_wifi_power(int);
 
 /* this is called by exit() */
-void nvidia_wlan_poweron(int on, int flag)
+void nvidia_wlan_poweron(int flag)
 {
 	if (flag == 1) {
 		// power
-		p3_wlan_gpio_enable();
-		tegra_sdhci_force_presence_change();
+		ventana_wifi_power(1);
+		ventana_wifi_set_carddetect(1);
 	} else {
 		OSL_DELAY(150);
 	}
 }
 EXPORT_SYMBOL(nvidia_wlan_poweron);
-void nvidia_wlan_poweroff(int off, int flag)
+void nvidia_wlan_poweroff(int flag)
 {
 	if (flag == 1) {
 		// power
-		p3_wlan_gpio_disable();
-		tegra_sdhci_force_presence_change();
+                ventana_wifi_power(0);
+                ventana_wifi_set_carddetect(0);
 	} else {
 		pr_info("nvidia_wlan_poweroff ==== skip\n");
 	}

@@ -41,8 +41,8 @@
 /* EP0_MPS_LIMIT
  *
  * Unfortunately there seems to be a limit of the amount of data that can
- * be transferred by IN transactions on EP0. This is either 127 bytes or 3
- * packets (which practically means 1 packet and 63 bytes of data) when the
+ * be transfered by IN transactions on EP0. This is either 127 bytes or 3
+ * packets (which practially means 1 packet and 63 bytes of data) when the
  * MPS is set to 64.
  *
  * This means if we are wanting to move >127 bytes of data, we need to
@@ -783,7 +783,7 @@ static void s3c_hsotg_start_req(struct s3c_hsotg *hsotg,
 		       hsotg->regs + S3C_DIEPINT(index));
 
 	/* Note, trying to clear the NAK here causes problems with transmit
-	 * on the S3C6400 ending up with the TXFIFO becoming full. */
+	 * on the S3C6400 ending up with the TXFIFO becomming full. */
 
 	/* check ep is enabled */
 	if (!(readl(hsotg->regs + epctrl_reg) & S3C_DxEPCTL_EPEna))
@@ -1176,10 +1176,10 @@ static void s3c_hsotg_process_control(struct s3c_hsotg *hsotg,
 		writel(ctrl, hsotg->regs + reg);
 
 		dev_dbg(hsotg->dev,
-			"written DxEPCTL=0x%08x to %08x (DxEPCTL=0x%08x)\n",
+			"writen DxEPCTL=0x%08x to %08x (DxEPCTL=0x%08x)\n",
 			ctrl, reg, readl(hsotg->regs + reg));
 
-		/* don't believe we need to anything more to get the EP
+		/* don't belive we need to anything more to get the EP
 		 * to reply with a STALL packet */
 	}
 }
@@ -1416,7 +1416,7 @@ static void s3c_hsotg_rx_data(struct s3c_hsotg *hsotg, int ep_idx, int size)
  * transaction.
  *
  * Note, since we don't write any data to the TxFIFO, then it is
- * currently believed that we do not need to wait for any space in
+ * currently belived that we do not need to wait for any space in
  * the TxFIFO.
  */
 static void s3c_hsotg_send_zlp(struct s3c_hsotg *hsotg,
@@ -1540,7 +1540,7 @@ static u32 s3c_hsotg_read_frameno(struct s3c_hsotg *hsotg)
  * that requires processing, so find out what is in there and do the
  * appropriate read.
  *
- * The RXFIFO is a true FIFO, the packets coming out are still in packet
+ * The RXFIFO is a true FIFO, the packets comming out are still in packet
  * chunks, so if you have x packets received on an endpoint you'll get x
  * FIFO events delivered, each with a packet's worth of data in it.
  *
@@ -2188,7 +2188,7 @@ irq_retry:
 
 	/* these next two seem to crop-up occasionally causing the core
 	 * to shutdown the USB transfer, so try clearing them and logging
-	 * the occurrence. */
+	 * the occurence. */
 
 	if (gintsts & S3C_GINTSTS_GOUTNakEff) {
 		dev_info(hsotg->dev, "GOUTNakEff triggered\n");
@@ -2469,7 +2469,7 @@ static struct usb_ep_ops s3c_hsotg_ep_ops = {
 	.queue		= s3c_hsotg_ep_queue,
 	.dequeue	= s3c_hsotg_ep_dequeue,
 	.set_halt	= s3c_hsotg_ep_sethalt,
-	/* note, don't believe we have any call for the fifo routines */
+	/* note, don't belive we have any call for the fifo routines */
 };
 
 /**
@@ -2523,8 +2523,7 @@ static int s3c_hsotg_corereset(struct s3c_hsotg *hsotg)
 	return 0;
 }
 
-int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
-		int (*bind)(struct usb_gadget *))
+int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 {
 	struct s3c_hsotg *hsotg = our_hsotg;
 	int ret;
@@ -2544,7 +2543,7 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
 		dev_err(hsotg->dev, "%s: bad speed\n", __func__);
 	}
 
-	if (!bind || !driver->setup) {
+	if (!driver->bind || !driver->setup) {
 		dev_err(hsotg->dev, "%s: missing entry points\n", __func__);
 		return -EINVAL;
 	}
@@ -2563,7 +2562,7 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
 		goto err;
 	}
 
-	ret = bind(&hsotg->gadget);
+	ret = driver->bind(&hsotg->gadget);
 	if (ret) {
 		dev_err(hsotg->dev, "failed bind %s\n", driver->driver.name);
 
@@ -2688,7 +2687,7 @@ err:
 	hsotg->gadget.dev.driver = NULL;
 	return ret;
 }
-EXPORT_SYMBOL(usb_gadget_probe_driver);
+EXPORT_SYMBOL(usb_gadget_register_driver);
 
 int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 {

@@ -34,25 +34,25 @@
 #include <wlioctl.h>
 #include <wl_iw.h>
 
-#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+//#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
 #include <mach/gpio.h>
 #include <mach/hardware.h>
 
 #define POWER_OFF       0
 #define POWER_ON        1
-#endif
+//#endif
 
 #define WL_ERROR(x) printf x
 #define WL_TRACE(x)
 
-#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+//#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
 extern void nvidia_wlan_poweroff(int off, int flag);
 extern void nvidia_wlan_poweron(int on, int flag);
-#endif /* CONFIG_MACH_SAMSUNG_VARIATION_TEGRA */
+//#endif /* CONFIG_MACH_SAMSUNG_VARIATION_TEGRA */
 
 #ifdef CUSTOMER_HW
-extern  void bcm_wlan_power_off(int);
-extern  void bcm_wlan_power_on(int);
+//extern  void bcm_wlan_power_off(int);
+//extern  void bcm_wlan_power_on(int);
 #endif /* CUSTOMER_HW */
 #if defined(CUSTOMER_HW2) || defined(CUSTOMER_HW_SAMSUNG)
 #ifdef CONFIG_WIFI_CONTROL_FUNC
@@ -145,12 +145,12 @@ dhd_customer_gpio_wlan_ctrl(int onoff)
 		case WLAN_RESET_OFF:
 			WL_TRACE(("%s: call customer specific GPIO to insert WLAN RESET\n",
 				__FUNCTION__));
-#if defined(CUSTOMER_HW)
-			bcm_wlan_power_off(2);
-#endif /* CUSTOMER_HW */
-#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+//#if defined(CUSTOMER_HW)
+//			bcm_wlan_power_off(2);
+//#endif /* CUSTOMER_HW */
+//#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
 			nvidia_wlan_poweroff (POWER_OFF, 2);
-#endif
+//#endif
 #if defined(CUSTOMER_HW2) || defined(CUSTOMER_HW_SAMSUNG)
 			wifi_set_power(0, 0);
 #endif
@@ -160,12 +160,12 @@ dhd_customer_gpio_wlan_ctrl(int onoff)
 		case WLAN_RESET_ON:
 			WL_TRACE(("%s: callc customer specific GPIO to remove WLAN RESET\n",
 				__FUNCTION__));
-#ifdef CUSTOMER_HW
-			bcm_wlan_power_on(2);
-#endif /* CUSTOMER_HW */
-#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+//#ifdef CUSTOMER_HW
+//			bcm_wlan_power_on(2);
+//#endif /* CUSTOMER_HW */
+//#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
 			nvidia_wlan_poweron (POWER_ON, 2);
-#endif
+//#endif
 #if defined(CUSTOMER_HW2) || defined(CUSTOMER_HW_SAMSUNG)
 			wifi_set_power(1, 0);
 #endif
@@ -175,25 +175,25 @@ dhd_customer_gpio_wlan_ctrl(int onoff)
 		case WLAN_POWER_OFF:
 			WL_TRACE(("%s: call customer specific GPIO to turn off WL_REG_ON\n",
 				__FUNCTION__));
-#ifdef CUSTOMER_HW
-			bcm_wlan_power_off(1);
-#endif /* CUSTOMER_HW */
-#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+//#ifdef CUSTOMER_HW
+//			bcm_wlan_power_off(1);
+//#endif /* CUSTOMER_HW */
+//#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
 			nvidia_wlan_poweroff (POWER_OFF, 1);
-#endif
+//#endif
 		break;
 
 		case WLAN_POWER_ON:
 			WL_TRACE(("%s: call customer specific GPIO to turn on WL_REG_ON\n",
 				__FUNCTION__));
-#ifdef CUSTOMER_HW
-			bcm_wlan_power_on(1);
+//#ifdef CUSTOMER_HW
+//			bcm_wlan_power_on(1);
 			/* Lets customer power to get stable */
-			OSL_DELAY(200);
-#endif /* CUSTOMER_HW */
-#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
+//			OSL_DELAY(200);
+//#endif /* CUSTOMER_HW */
+//#ifdef CONFIG_MACH_SAMSUNG_VARIATION_TEGRA
 			nvidia_wlan_poweron (POWER_ON, 1);
-#endif
+//#endif
 		break;
 	}
 }
