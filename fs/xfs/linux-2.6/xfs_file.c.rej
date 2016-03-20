@@ -1,0 +1,10 @@
+--- fs/xfs/linux-2.6/xfs_file.c
++++ fs/xfs/linux-2.6/xfs_file.c
+@@ -1072,6 +1127,7 @@
+ #ifdef HAVE_FOP_OPEN_EXEC
+ 	.open_exec	= xfs_file_open_exec,
+ #endif
++	.fallocate	= xfs_file_fallocate,
+ };
+ 
+ const struct file_operations xfs_dir_file_operations = {

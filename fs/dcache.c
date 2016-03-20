@@ -67,6 +67,32 @@ struct dentry_stat_t dentry_stat = {
 	.age_limit = 45,
 };
 
+static struct dentry * __d_find_any_alias(struct inode *inode)
+{
+	struct dentry *alias;
+
+	if (list_empty(&inode->i_dentry))
+		return NULL;
+	alias = list_first_entry(&inode->i_dentry, struct dentry, d_alias);
+	/*
+	 * code is too old to support __dget(), use dget_locked() instead
+	 * -- marc1706
+	 */
+	dget_locked(alias);
+	return alias;
+}
+
+struct dentry * d_find_any_alias(struct inode *inode)
+{
+	struct dentry *de;
+
+	spin_lock(&inode->i_lock);
+	de = __d_find_any_alias(inode);
+	spin_unlock(&inode->i_lock);
+	return de;
+}
+EXPORT_SYMBOL(d_find_any_alias);
+
 static void __d_free(struct dentry *dentry)
 {
 	WARN_ON(!list_empty(&dentry->d_alias));
